@@ -1,0 +1,207 @@
+/* =============================================================================
+   GLOBAL.CSS — Estilos Base do CodexMaster
+   
+   Importa Tailwind CSS e define variáveis globais, reset, e estilos
+   medievais customizados que não podem ser feitos apenas com classes utilitárias.
+============================================================================= */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---- Reset e Base ---- */
+@layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html, body, #root {
+    height: 100%;
+    width: 100%;
+    overflow: hidden; /* O scroll é controlado por cada view individualmente */
+  }
+
+  body {
+    background-color: #1a1a1a;
+    color: #e8e0d0;
+    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Previne seleção de texto acidental durante uso do app */
+    user-select: none;
+  }
+
+  /* Permite seleção em campos de texto e áreas de conteúdo editável */
+  input, textarea, [contenteditable], .selectable {
+    user-select: text;
+  }
+
+  /* Scrollbar customizada (estilo medieval escuro) */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #1a1a1a;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #3a3a3a;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #6b5423;
+  }
+
+  /* Foco acessível com estilo medieval */
+  :focus-visible {
+    outline: 2px solid #c9a84c;
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+/* ---- Componentes Reutilizáveis ---- */
+@layer components {
+
+  /* === Botões === */
+  .btn-primary {
+    @apply px-4 py-2 rounded-md font-body font-medium text-sm
+           bg-gold-primary text-codex-bg
+           border border-gold-muted
+           transition-all duration-200 ease-out
+           hover:bg-gold-dim hover:text-text-primary hover:shadow-gold-glow
+           active:scale-95;
+  }
+
+  .btn-secondary {
+    @apply px-4 py-2 rounded-md font-body font-medium text-sm
+           bg-codex-surface2 text-text-secondary
+           border border-codex-border
+           transition-all duration-200 ease-out
+           hover:bg-codex-surface hover:text-text-primary hover:border-gold-dim
+           active:scale-95;
+  }
+
+  .btn-danger {
+    @apply px-4 py-2 rounded-md font-body font-medium text-sm
+           bg-crimson-muted text-text-primary
+           border border-crimson-muted
+           transition-all duration-200 ease-out
+           hover:bg-crimson-bright hover:shadow-crimson-glow
+           active:scale-95;
+  }
+
+  .btn-icon {
+    @apply p-2 rounded-md text-text-secondary
+           transition-all duration-150 ease-out
+           hover:bg-codex-surface2 hover:text-gold-primary
+           active:scale-90;
+  }
+
+  /* === Cards e Superfícies === */
+  .card {
+    @apply bg-codex-surface border border-codex-border rounded-lg
+           shadow-inner-dark;
+  }
+
+  .card-elevated {
+    @apply bg-codex-surface2 border border-codex-border rounded-lg
+           shadow-md;
+  }
+
+  /* === Divisor Decorativo Medieval === */
+  .divider-gold {
+    @apply w-full h-px bg-gradient-gold opacity-30 my-3;
+  }
+
+  /* === Inputs === */
+  .input-medieval {
+    @apply w-full px-3 py-2 rounded-md text-sm
+           bg-codex-bg text-text-primary
+           border border-codex-border
+           placeholder:text-text-muted
+           transition-colors duration-150
+           focus:border-gold-muted focus:outline-none focus:ring-1 focus:ring-gold-muted/40;
+  }
+
+  /* === Badge de Status === */
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-medium;
+  }
+  .badge-player {
+    @apply badge bg-blue-900/40 text-blue-300 border border-blue-800/50;
+  }
+  .badge-creature {
+    @apply badge bg-crimson-muted/40 text-crimson-bright border border-crimson-muted/50;
+  }
+
+  /* === Stat Box (para atributos D&D) === */
+  .stat-box {
+    @apply flex flex-col items-center justify-center
+           p-3 rounded-md
+           bg-codex-bg border border-codex-border
+           transition-all duration-150 cursor-pointer
+           hover:border-gold-dim hover:shadow-gold-sm;
+  }
+  .stat-box .stat-label {
+    @apply text-xs font-body font-medium text-text-muted uppercase tracking-wider;
+  }
+  .stat-box .stat-value {
+    @apply text-2xl font-heading font-bold text-text-primary leading-none mt-1;
+  }
+  .stat-box .stat-modifier {
+    @apply text-sm font-mono text-gold-primary mt-0.5;
+  }
+
+  /* === Título de Seção com decoração medieval === */
+  .section-title {
+    @apply font-heading text-gold-primary text-sm uppercase tracking-widest
+           flex items-center gap-2;
+  }
+  .section-title::before,
+  .section-title::after {
+    content: '';
+    @apply flex-1 h-px bg-codex-border;
+  }
+
+  /* === Tooltip simples === */
+  .tooltip {
+    @apply absolute z-50 px-2 py-1 text-xs text-text-primary
+           bg-codex-surface2 border border-codex-border rounded shadow-md
+           pointer-events-none whitespace-nowrap;
+  }
+}
+
+/* ---- Utilitários Customizados ---- */
+@layer utilities {
+  /* Texto com gradiente dourado */
+  .text-gradient-gold {
+    background: linear-gradient(135deg, #c9a84c 0%, #e8c96a 50%, #c9a84c 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Bordas decorativas laterais */
+  .border-l-gold {
+    border-left: 2px solid #c9a84c;
+  }
+
+  /* Animação de entrada para elementos que surgem na UI */
+  .animate-enter {
+    animation: fadeIn 0.2s ease-out forwards;
+  }
+
+  /* Prevent drag de imagens no app desktop */
+  img, video {
+    -webkit-user-drag: none;
+    pointer-events: none;
+  }
+  .interactive img {
+    pointer-events: auto;
+  }
+}

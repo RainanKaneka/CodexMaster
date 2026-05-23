@@ -1,0 +1,138 @@
+# CODEXMASTER — CHANGELOG DE DESENVOLVIMENTO
+# Formato: [YYYY-MM-DD HH:MM] AÇÃO: arquivo - descrição
+# Regra obrigatória conforme direcao.md - Seção 1: Registro de Alterações
+# ============================================================================
+
+[2026-05-22 13:20] VERIFICADO: TypeScript renderer + main - npx tsc --noEmit e npx tsc -p tsconfig.electron.json --noEmit passaram com zero erros após implementação da Fase 4 (Enciclopédia de Lore).
+[2026-05-22 13:20] BUILD: npm run build - Build de produção completo com sucesso (42 módulos, 239.80 kB JS / 32.27 kB CSS gzip).
+[2026-05-22 13:20] CRIADO: src/renderer/views/LoreEncyclopediaView.tsx - View completa da Enciclopédia de Lore. Inclui: árvore de pastas recursiva e colapsável com botões contextuais de ação inline; parser Markdown puro sem dependências externas (headings, bold, italic, code, blockquotes, listas, code blocks, HR); wikilinks [[Nota]] resolvidos em runtime (abre outra nota OU painel flutuante de ficha se o nome coincidir); modo de edição (textarea + toolbar) e modo de visualização (renderização completa); upload de ícone circular e imagem de capa via IPC copyMediaFile (armazenados como caminho relativo em media/); importação de .md externos (compatível com Obsidian); painel flutuante de ficha com stats resumidos; modais de rename e confirmação de exclusão recursiva.
+[2026-05-22 13:20] ATUALIZADO: src/renderer/components/Sidebar.tsx - Adicionado item 'Lore' (📖) entre 'Combate' e 'Config'. Tipo ActiveView expandido para incluir 'lore'.
+[2026-05-22 13:20] ATUALIZADO: src/renderer/App.tsx - Adicionado import de LoreEncyclopediaView e rota 'lore' no switch de renderização.
+[2026-05-22 13:20] ATUALIZADO: src/renderer/context/DatabaseContext.tsx - Adicionado estado loreTree (LoreNode[]) carregado no startup. Implementadas ações saveLoreNode (upsert imutável) e deleteLoreNode. Carregamento paralelo com Promise.all expandido para incluir getLoreTree.
+[2026-05-22 13:20] ATUALIZADO: src/main/preload.ts - Registrados 6 novos canais IPC: getLoreTree, saveLoreNode, deleteLoreNode, copyMediaFile, readMediaFileAsUrl, selectMdFile. Import de LoreNode adicionado.
+[2026-05-22 13:20] ATUALIZADO: src/main/main.ts - Adicionados 6 handlers IPC para Lore e Mídia. getMediaDir() cria pasta media/ local. fs:copyMediaFile copia arquivos com nome único (prefix_timestamp.ext) e retorna caminho relativo. fs:readMediaFileAsUrl resolve para URL file://. fs:selectMdFile abre dialog nativo .md e retorna {title, content}. readDatabase() e getEmptyDatabase() atualizados com loreTree: [] e retrocompatibilidade via ??.
+[2026-05-22 13:20] ATUALIZADO: src/main/types.ts - Adicionada interface LoreNode com campos: id, title, type, parentId, content?, iconPath?, coverImagePath?, createdAt, updatedAt. LocalDatabase expandida com loreTree: LoreNode[]. CodexAPI expandida com getLoreTree, saveLoreNode, deleteLoreNode, copyMediaFile, readMediaFileAsUrl, selectMdFile.
+
+[2026-05-22 12:15] VERIFICADO: TypeScript renderer + main - npx tsc --noEmit e npx tsc -p tsconfig.electron.json --noEmit passaram com zero erros após implementação da Fase 3 (Rastreador de Combate).
+[2026-05-22 12:15] BUILD: npm run build - Build de produção completo com sucesso (41 módulos, 218.82 kB JS / 30.50 kB CSS gzip).
+[2026-05-22 12:15] CRIADO: src/renderer/views/CombatTrackerView.tsx - View completa do Rastreador de Combate com dois modos: Staging (montagem do encontro com seleção e clonagem de fichas, sufixos automáticos A/B/C para criaturas, nomes editáveis) e Combate Ativo (ordem por iniciativa D&D 5e, controle de turno, barra de PV colorida, inputs de dano/cura, edição direta de PV, persistência automática a cada mutação).
+[2026-05-22 12:15] ATUALIZADO: src/renderer/components/Sidebar.tsx - Adicionado item de navegação 'Combate' (🛡️) entre 'Compêndio' e 'Config'. Tipo ActiveView expandido para incluir 'combat'.
+[2026-05-22 12:15] ATUALIZADO: src/renderer/App.tsx - Adicionado import de CombatTrackerView e rota 'combat' no switch de renderização.
+[2026-05-22 12:15] ATUALIZADO: src/renderer/context/DatabaseContext.tsx - Adicionado estado activeEncounter (ActiveEncounter | null) carregado no startup. Implementada ação saveActiveEncounter com atualização imutável e re-lançamento de erros. Carregamento paralelo com Promise.all expandido para incluir getActiveEncounter.
+[2026-05-22 12:15] ATUALIZADO: src/main/preload.ts - Registrados canais IPC seguros para o encontro ativo (getActiveEncounter, saveActiveEncounter) via contextBridge. Import de ActiveEncounter adicionado.
+[2026-05-22 12:15] ATUALIZADO: src/main/main.ts - Adicionados handlers IPC db:getActiveEncounter e db:saveActiveEncounter com escrita atômica. getEmptyDatabase() e readDatabase() atualizados com campo activeEncounter (null por padrão) e retrocompatibilidade via operador ??.
+[2026-05-22 12:15] ATUALIZADO: src/main/types.ts - Adicionadas interfaces Combatant e ActiveEncounter conforme fase3.md. LocalDatabase expandida com campo activeEncounter: ActiveEncounter | null. CodexAPI expandida com assinaturas getActiveEncounter e saveActiveEncounter.
+
+[2026-05-22 04:18] VERIFICADO: TypeScript renderer + main - npx tsc --noEmit e npx tsc -p tsconfig.electron.json --noEmit passaram com zero erros após implementação da Fase 2 (Compêndio).
+[2026-05-22 04:18] CRIADO: src/renderer/views/CompendiumView.tsx - View completa do Módulo de Compêndio com layout de 3 colunas (filtros / listagem / detalhes+formulário). Sub-abas Magias e Itens, filtros cumulativos (nível, escola, componentes para Magias; tipo, raridade, sintonização para Itens), busca por nome/descrição, CRUD completo com confirmação de exclusão.
+[2026-05-22 04:18] ATUALIZADO: src/renderer/App.tsx - Adicionado import de CompendiumView e rota 'compendium' no switch de renderização.
+[2026-05-22 04:18] ATUALIZADO: src/renderer/components/Sidebar.tsx - Adicionado item de navegação 'Compêndio' (📚) entre 'Dados' e 'Config'. Tipo ActiveView expandido para incluir 'compendium'.
+[2026-05-22 04:18] ATUALIZADO: src/renderer/context/DatabaseContext.tsx - Adicionados estados spells[] e items[] carregados no startup. Implementadas ações saveSpell, deleteSpell, saveItem, deleteItem com padrões imutáveis.
+[2026-05-22 04:18] ATUALIZADO: src/main/preload.ts - Registrados canais IPC seguros para Magias (getSpells, saveSpell, deleteSpell) e Itens (getItems, saveItem, deleteItem) via contextBridge.
+[2026-05-22 04:18] ATUALIZADO: src/main/main.ts - Adicionados IPC handlers CRUD para db:getSpells, db:saveSpell, db:deleteSpell, db:getItems, db:saveItem, db:deleteItem. Atualizado getEmptyDatabase() e readDatabase() com retrocompatibilidade: chaves spells e items inicializadas como [] se ausentes no db.json existente.
+[2026-05-22 04:18] ATUALIZADO: src/main/types.ts - Adicionados tipos SpellSchool, Spell, ItemType, ItemRarity, Item. LocalDatabase expandida com campos spells e items. CodexAPI expandida com assinaturas CRUD para Magias e Itens.
+
+[2026-05-22 03:50] CORRIGIDO: src/renderer/views/SheetsView.tsx - Refatorados os inputs de combate (PV Atual, PV Máximo, CA, Nível/ND) para usarem estado local de string e validação apenas no evento onBlur, evitando travamentos ao limpar ou digitar temporariamente fora dos limites. Adicionada prop key no SheetForm para reinicializar estados ao trocar de ficha.
+[2026-05-22 03:42] CORRIGIDO: src/renderer/views/SheetsView.tsx - Corrigido travamento na digitação de atributos limitando a validação de mínimo (10) e máximo (30) para o evento onBlur com auxílio de estado local temporário.
+[2026-05-22 03:42] CORRIGIDO: src/renderer/views/MapsView.tsx - Corrigido fechamento indesejado do editor de pins ao clicar nos campos internos, adicionando stopPropagation no container principal do PinEditor.
+[2026-05-22 03:42] VERIFICADO: TypeScript compiler - Compilação do main e renderer executadas com sucesso sem erros.
+
+[2026-05-22 03:24] CORRIGIDO: src/renderer/App.tsx - Removido import React desnecessário (React 18 + JSX transform automático).
+[2026-05-22 03:24] CORRIGIDO: src/renderer/components/DicePanel.tsx - Removido import React desnecessário.
+[2026-05-22 03:24] CORRIGIDO: src/renderer/components/Sidebar.tsx - Removido import React desnecessário.
+[2026-05-22 03:24] CORRIGIDO: src/renderer/context/DatabaseContext.tsx - Removido import React desnecessário.
+[2026-05-22 03:24] CORRIGIDO: src/renderer/views/SettingsView.tsx - Removido import React desnecessário.
+[2026-05-22 03:24] CORRIGIDO: src/renderer/views/SheetsView.tsx - Removido import React desnecessário.
+[2026-05-22 03:24] CORRIGIDO: src/renderer/views/MapsView.tsx - Removido import React desnecessário.
+[2026-05-22 03:24] BUILD: dist-electron/main.js - Processo main compilado com sucesso (tsc -p tsconfig.electron.json). Zero erros.
+[2026-05-22 03:24] VERIFICADO: TypeScript renderer - npx tsc --noEmit passou com zero erros em todos os arquivos do renderer.
+
+[2026-05-22 03:12] CRIADO: package.json - Configuração do projeto com dependências: Electron v30, React v18, TypeScript, Tailwind CSS, Vite, concurrently, wait-on. Scripts de dev e build definidos.
+
+[2026-05-22 03:12] CRIADO: tsconfig.json - Configuração TypeScript para o processo renderer (React/Vite). Target ES2020, JSX react-jsx, paths alias @/.
+
+[2026-05-22 03:12] CRIADO: tsconfig.electron.json - Configuração TypeScript para o processo main do Electron. Module CommonJS, outDir dist-electron.
+
+[2026-05-22 03:12] CRIADO: tailwind.config.js - Paleta medieval escura: codex-bg (#1a1a1a), codex-surface (#242424), gold-primary (#c9a84c), crimson-primary (#8b2a3a), bronze-primary (#8c6239). Animações: fade-in, slide-in, pulse-gold, dice-roll. Tipografia: Cinzel + Inter.
+
+[2026-05-22 03:12] CRIADO: postcss.config.js - Configuração PostCSS para processar Tailwind CSS.
+
+[2026-05-22 03:12] CRIADO: vite.config.ts - Bundler Vite com root em src/renderer, output em dist/, servidor local na porta 5173. Plugin @vitejs/plugin-react.
+
+[2026-05-22 03:12] CRIADO: src/main/types.ts - Tipos TypeScript compartilhados: Attributes, CharacterSheet, MapPin, MapData, LocalDatabase, CodexAPI. Declaração global window.codexAPI.
+
+[2026-05-22 03:12] CRIADO: src/main/main.ts - Processo principal do Electron. Criação de janela 1440x900 (mínimo 1280x720). IPC handlers: db:getSheets, db:saveSheet, db:deleteSheet, db:getMaps, db:saveMap, db:deleteMap, fs:selectImageFile, fs:readImageAsBase64, db:getCampaignNotes, db:saveCampaignNotes. Persistência JSON via fs nativo. Escrita atômica via arquivo .tmp + rename.
+
+[2026-05-22 03:12] CRIADO: src/main/preload.ts - Ponte IPC segura via contextBridge. Expõe window.codexAPI com funções tipadas. Não expõe módulos Node.js diretamente (conforme regra de segurança IPC do direcao.md).
+
+[2026-05-22 03:12] CRIADO: src/renderer/index.html - HTML base com CSP para Electron, Google Fonts (Cinzel Decorative + Inter), meta tags de SEO.
+
+[2026-05-22 03:12] CRIADO: src/renderer/main.tsx - Entry point React. Monta aplicação em #root com React.StrictMode.
+
+[2026-05-22 03:12] CRIADO: src/renderer/styles/global.css - Estilos globais Tailwind. Componentes: btn-primary, btn-secondary, btn-danger, btn-icon, card, card-elevated, input-medieval, stat-box, badge-player, badge-creature, section-title. Scrollbar customizada. Utilitário text-gradient-gold.
+
+[2026-05-22 03:12] CRIADO: src/renderer/utils/dnd5e.ts - Utilitários puros de regras D&D 5e (SoC conforme direcao.md): calculateModifier (formula oficial floor((v-10)/2)), formatModifier, getFormattedModifier, getProficiencyBonus, getProficiencyBonusByCR, rollDie, rollDice, rollExpression, ATTRIBUTE_LABELS, ATTRIBUTE_FULL_NAMES, STANDARD_DICE, generateId, getDefaultAttributes.
+
+[2026-05-22 03:12] CRIADO: src/renderer/context/DatabaseContext.tsx - Context API com DatabaseProvider. Estado global de sheets[] e maps[]. Carregamento inicial via IPC. Ações CRUD imutáveis usando map(), filter(), spread. Hook useDatabase() para acesso nos componentes.
+
+[2026-05-22 03:12] CRIADO: src/renderer/hooks/useDiceRoller.ts - Custom hook: rollStandardDie(faces), rollCustomExpression(expr), clearHistory(). Histórico de até 10 rolagens. Lógica isolada do componente visual (SoC).
+
+[2026-05-22 03:12] CRIADO: src/renderer/components/Sidebar.tsx - Barra lateral com 4 itens (Fichas, Mapas, Dados, Config), indicador visual de ativo, logo CodexMaster, versão no rodapé.
+
+[2026-05-22 03:12] CRIADO: src/renderer/components/DicePanel.tsx - Rolador oculto com 6 dados rápidos (d4-d20), rolagem por expressão livre, resultado em destaque, feedback de crítico/falha crítica para d20, histórico das últimas 10 rolagens.
+
+[2026-05-22 03:12] CRIADO: src/renderer/views/SheetsView.tsx - View completa de Fichas: lista com busca e filtros, formulário de criação/edição, StatBox com cálculo automático de modificadores em cascata, barra de PV colorida, badges de tipo.
+
+[2026-05-22 03:12] CRIADO: src/renderer/views/MapsView.tsx - View de Mapas: upload de imagem via dialog nativo (IPC), exibição Base64, pins com posicionamento percentual (responsividade), clique direito para novo pin, editor flutuante de pin, CRUD completo.
+
+[2026-05-22 03:12] CRIADO: src/renderer/views/SettingsView.tsx - Tela de configurações placeholder com informações do projeto e versão. Fases futuras.
+
+[2026-05-22 03:12] CRIADO: src/renderer/App.tsx - Componente raiz com layout Sidebar + Main, roteamento simples por estado (activeView), envolto em DatabaseProvider.
+
+[2026-05-22 03:12] CRIADO: changelog.log - Registro inicial de todas as criações do scaffold base do projeto CodexMaster (conforme regra obrigatória do direcao.md - Seção 1).
+
+[2026-05-22 11:55] CORRIGIDO: src/renderer/views/CompendiumView.tsx - Envolvido SpellForm e ItemForm em tags <form> com preventDefault no onSubmit. Atualizados botões de cancelar para type="button" e salvar para type="submit". Lógica handleSaveSpell e handleSaveItem corrigida para gerar crypto.randomUUID() ou timestamp/random string para novas criações sem ID prévio.
+[2026-05-22 11:55] CORRIGIDO: src/renderer/context/DatabaseContext.tsx - Lógica saveSpell e saveItem atualizada para atualizar o estado local de forma imutável (setSpells e setItems) apenas após a promessa do IPC resolver com sucesso, e re-lançar erros para que possam ser tratados na camada visual.
+[2026-05-22 11:55] CORRIGIDO: src/main/main.ts - Handlers IPC db:saveSpell e db:saveItem atualizados com verificação de integridade dos arrays spells e items antes de fazer push e persistir no db.json de forma atômica.
+[2026-05-22 11:55] VERIFICADO: TypeScript compiler - Compilação do main e renderer executadas com sucesso sem erros.
+
+[2026-05-22 13:49] CORRIGIDO: src/main/main.ts - Implementado o registro do protocolo seguro codex-media:// usando protocol.handle e net.fetch (API moderna do Electron 30) para servir arquivos locais da pasta media/ protegendo o app e permitindo a renderização de capas e ícones quebrados; adicionado handler IPC lore:importMarkdown com lógica recursiva para importar diretórios inteiros e múltiplos arquivos .md.
+[2026-05-22 13:49] CORRIGIDO: src/main/types.ts e src/main/preload.ts - Adicionada a função importMarkdownBatch à API codexAPI tipada e exportada pelo contextBridge.
+[2026-05-22 13:49] CORRIGIDO: src/renderer/views/LoreEncyclopediaView.tsx - Inserido botão de importação na raiz da sidebar para lote de arquivos e pastas; interface inteiramente atualizada para processar os caminhos relativos importados recriando pastas hierarquicamente; adicionados os handlers nativos de HTML5 Drag and Drop (onDragStart, onDragOver, onDragLeave, onDrop) nos nós da árvore para permitir reposicionamento/mover de arquivos e pastas.
+[2026-05-22 13:49] VERIFICADO: TypeScript e Build executados com sucesso para os processos renderer e main confirmando que as refatorações da Fase 4 estão seguras.
+
+[2026-05-22 14:03] CORRIGIDO: src/main/main.ts - Substituído `protocol.handle('codex-media')` por `protocol.registerFileProtocol('local')` com privilégios de bypass de CSP, conforme requisito de segurança e renderização no Windows, assegurando que as imagens físicas resolvam de `local://C:/...` com caminhos limpos. Adicionado handler IPC `media:saveCroppedImage` que recebe base64, processa os buffers gerados no canvas e grava como novo arquivo físico único em disco para evitar bloat no `db.json`.
+[2026-05-22 14:03] CORRIGIDO: src/renderer/index.html - Atualizado Content-Security-Policy (CSP) `img-src` para incluir explicitamente o prefixo de protocolo `local:` permitindo o carregamento direto dos arquivos no Electron.
+[2026-05-22 14:03] CRIADO: src/renderer/components/ImageCropperModal.tsx - Novo modal construído do zero utilizando a biblioteca `react-image-crop` com suporte nativo ao Canvas. Apresenta controles visuais com proporções automáticas (1:1 circular para ícones, 16:9 retangular para capas) extraindo a imagem recortada em formato Base64 otimizado sem perder qualidade e permitindo salvar o enquadramento de volta no Electron.
+[2026-05-22 14:03] CORRIGIDO: src/renderer/views/LoreEncyclopediaView.tsx - Substituído o fluxo de cópia síncrono para o workflow interativo em duas etapas: seleção de arquivo original que abre o `<ImageCropperModal>`, permitindo edição e posterior envio via `handleSaveCrop`, preenchendo a prop do node corretamente e renderizando os componentes já ajustados.
+[2026-05-22 14:03] VERIFICADO: Compilação TypeScript e pacote Vite build (`npm run build`) completados com 0 avisos de tipagem e sem quebrar notas ou fichas pré-existentes.
+
+[2026-05-22 14:27] ATUALIZADO: src/renderer/components/ImageCropperModal.tsx - Adicionado classes CSS (w-auto) para corrigir overflow da imagem durante o redimensionamento dentro do modal de crop em telas menores ou com imagens de alta resolução.
+[2026-05-22 14:27] ATUALIZADO: src/renderer/views/LoreEncyclopediaView.tsx - Implementada funcionalidade de Expansão da Capa (isCoverExpanded) com botão toggle inferior e transições Tailwind (transition-all duration-500) para alternar entre h-40 e maxHeight 80vh sem quebrar proporções.
+[2026-05-22 14:27] ATUALIZADO: src/renderer/views/LoreEncyclopediaView.tsx - Implementada visualização Lightbox para o avatar/ícone das notas (isIconLightboxOpen), escurecendo a tela com backdrop-blur e ampliando a imagem central com fechamento por click-outside.
+[2026-05-22 14:27] VERIFICADO: Nova compilação bem-sucedida confirmando ausência de regressões com npm run build.
+
+[2026-05-22 14:38] REFINADO: src/renderer/components/ImageCropperModal.tsx - Adicionado `overflow-hidden` rigoroso no contêiner raiz do modal e ajustado `max-h-[70vh]` diretamente na imagem fonte, evitando permanentemente que resoluções anômalas fujam do recorte.
+[2026-05-22 14:38] REFINADO: src/renderer/views/LoreEncyclopediaView.tsx - Resolvido falha de clique no Lightbox ao envelopar a imagem do avatar em um elemento `<button focus:outline-none>`. A capa expansível foi refatorada: removido o lettebox (`bg-black`, `object-contain`) passando a utilizar o `object-cover` fluído limitando o `max-h-[2000px]` e animando sutilmente com timing `duration-700 ease-[cubic-bezier(0.4,0,0.2,1)]` revelando a imagem inteira naturalmente de cima para baixo.
+[2026-05-22 14:38] VERIFICADO: Compilação de UI consolidada sem erros (npm run build).
+
+[2026-05-22 14:46] CORRIGIDO: src/renderer/views/LoreEncyclopediaView.tsx - Problema de usabilidade (perda de pastas abertas ao mudar de aba) resolvido. Feito o lifting de estado do controle de expansão (`open`) para o nível superior da View (`expandedFolders`) através da integração nativa com o `localStorage` do Electron.
+[2026-05-22 14:46] ATUALIZADO: src/renderer/views/LoreEncyclopediaView.tsx - Inserido lógica em que a primeira execução inicia a enciclopédia com a árvore 100% retraída por padrão (ao contrário de 100% aberta), mantendo um histórico limpo, mas a partir daí qualquer expansão, adição de nova pasta (`handleAddFolder`) ou novo arquivo arquivado (`handleAddFile`) salva o array exato no Storage, restaurando os nós visuais entre guias da interface sem poluir o arquivo principal de JSON.
+
+[2026-05-22 17:11] IMPLEMENTADO: src/main/types.ts - Adicionadas as interfaces `SessionLog` e `AdventureHook` (Fase 5 - Diário de Campanha) com tipagem completa. Expandida `LocalDatabase` com chaves `sessions` e `hooks`. Adicionados 6 novos métodos à interface `CodexAPI`.
+[2026-05-22 17:11] IMPLEMENTADO: src/main/main.ts - Adicionados arrays `sessions: []` e `hooks: []` em `getEmptyDatabase()` e `readDatabase()` para garantir retrocompatibilidade não-destrutiva. Implementados 6 handlers IPC (`db:getSessions`, `db:saveSession`, `db:deleteSession`, `db:getHooks`, `db:saveHook`, `db:deleteHook`) seguindo o padrão read-modify-write com segurança de arquivo.
+[2026-05-22 17:11] IMPLEMENTADO: src/main/preload.ts - Adicionados imports de `SessionLog` e `AdventureHook` e expostos os 6 novos métodos no `contextBridge`.
+[2026-05-22 17:11] IMPLEMENTADO: src/renderer/context/DatabaseContext.tsx - Adicionados estados `sessions` e `hooks`, carregados via `Promise.all` na inicialização. Implementadas as 4 ações imutáveis `saveSession`, `deleteSession`, `saveHook`, `deleteHook` e expostas no `contextValue`.
+[2026-05-22 17:11] CRIADO: src/renderer/views/CampaignDiaryView.tsx - Nova View completa do Diário de Campanha com layout split-screen: coluna esquerda contém sidebar de linha do tempo com cards de Sessão ordenados cronologicamente e um editor embutido (visualização e edição do resumo em Markdown via textarea monospace); coluna direita é o Painel de Ganchos de Aventura com formulário de adição, checklist de pendentes/resolvidos e exclusão individual.
+[2026-05-22 17:11] ATUALIZADO: src/renderer/components/Sidebar.tsx - Adicionado botão de navegação "Diário" (✍️) e nova `ActiveView` `diary`.
+[2026-05-22 17:11] ATUALIZADO: src/renderer/App.tsx - Importada e roteada a nova `CampaignDiaryView` para a view `diary`.
+[2026-05-22 17:11] VERIFICADO: `npm run build` completado com 0 erros de TypeScript e 46 módulos transformados com sucesso.
+
+[2026-05-22 17:59] IMPLEMENTADO: src/main/types.ts - Adicionadas as interfaces `RollTableResult` e `RollTable` (Fase 6). Expandida `LocalDatabase` com a chave `rollTables: RollTable[]`. Adicionados 3 métodos (`getRollTables`, `saveRollTable`, `deleteRollTable`) à interface `CodexAPI`.
+[2026-05-22 17:59] IMPLEMENTADO: src/main/main.ts - Adicionado `rollTables: []` em `getEmptyDatabase()` e `readDatabase()` para retrocompatibilidade. Implementados 3 handlers IPC (`db:getRollTables`, `db:saveRollTable`, `db:deleteRollTable`).
+[2026-05-22 17:59] IMPLEMENTADO: src/main/preload.ts - Adicionado import de `RollTable` e expostos os 3 novos métodos no `contextBridge`.
+[2026-05-22 17:59] IMPLEMENTADO: src/renderer/context/DatabaseContext.tsx - Adicionados estado `rollTables`, carregamento no `Promise.all` inicial e 2 ações imutáveis `saveRollTable` e `deleteRollTable`.
+[2026-05-22 17:59] CRIADO: src/renderer/views/GeneratorsView.tsx - Nova View de Geradores com layout split-screen: coluna esquerda com editor de Tabelas de Rolagem customizadas (TableEditor com grid de linhas rangeMin/rangeMax/texto) e cards de tabela com animação de dado (~600ms de delay) antes de revelar o resultado; coluna direita com painel de Geradores Estáticos pré-configurados com 5 categorias (Nomes de PNJs, Boatos de Taverna, Clima, Mercador Aleatório, Gancho de Cena) e histórico acumulativo de até 12 resultados.
+[2026-05-22 17:59] ATUALIZADO: src/renderer/components/Sidebar.tsx - Adicionado botão de navegação "Geradores" (🎲) e nova `ActiveView` `generators`.
+[2026-05-22 17:59] ATUALIZADO: src/renderer/App.tsx - Importada e roteada `GeneratorsView` para a view `generators`.
+[2026-05-22 17:59] VERIFICADO: `npm run build` completado com 0 erros (47 módulos transformados).
