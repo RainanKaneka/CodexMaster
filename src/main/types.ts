@@ -48,6 +48,12 @@ export interface CharacterSheet {
   speed?: number;
   /** Campo livre para anotações do Mestre sobre o personagem/criatura */
   notes: string;
+  /**
+   * Tags coloridas customizadas para filtragem e organização visual (v1.1).
+   * Cada tag possui um nome (lowercase) e uma cor hexadecimal escolhida pelo Mestre.
+   * Campo opcional para retrocompatibilidade com fichas anteriores.
+   */
+  tags?: { name: string; color: string }[];
   /** Timestamp ISO 8601 de criação da ficha */
   createdAt: string;
   /** Timestamp ISO 8601 da última modificação */

@@ -34,9 +34,136 @@ function createEmptySheet(type: 'player' | 'creature'): CharacterSheet {
     armorClass: 10,
     speed: 9,
     notes: '',
+    tags: [],
     createdAt: now,
     updatedAt: now,
   };
+}
+
+// ---- Sub-componente: Input de Tags ----
+
+/** Paleta de cores medievais disponíveis para as tags */
+const TAG_COLORS = [
+  { hex: '#b8973a', label: 'Ouro' },
+  { hex: '#a83232', label: 'Carmesim' },
+  { hex: '#4a7fa5', label: 'Azul' },
+  { hex: '#4a8a5a', label: 'Verde' },
+  { hex: '#7a4a9a', label: 'Púrpura' },
+  { hex: '#8a6a3a', label: 'Bronze' },
+  { hex: '#a06060', label: 'Rosé' },
+  { hex: '#5a7a7a', label: 'Ardósia' },
+];
+
+type SheetTag = { name: string; color: string };
+
+interface TagInputProps {
+  tags: SheetTag[];
+  onChange: (tags: SheetTag[]) => void;
+}
+
+function TagInput({ tags, onChange }: TagInputProps) {
+  const [inputValue, setInputValue] = useState('');
+  const [selectedColor, setSelectedColor] = useState(TAG_COLORS[0].hex);
+
+  const addTag = () => {
+    const trimmed = inputValue.trim().toLowerCase();
+    if (!trimmed || tags.some((t) => t.name === trimmed)) {
+      setInputValue('');
+      return;
+    }
+    // Persistência: chama onChange que dispara updateField no SheetForm pai,
+    // garantindo que o array de tags seja incluído no objeto salvo via IPC.
+    onChange([...tags, { name: trimmed, color: selectedColor }]);
+    setInputValue('');
+  };
+
+  const removeTag = (name: string) => {
+    onChange(tags.filter((t) => t.name !== name));
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addTag();
+    } else if (e.key === 'Backspace' && !inputValue && tags.length > 0) {
+      removeTag(tags[tags.length - 1].name);
+    }
+  };
+
+  return (
+    <div>
+      <label className="text-xs text-text-muted block mb-1">Tags</label>
+
+      {/* Badges das tags existentes */}
+      {tags.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {tags.map((tag) => (
+            <span
+              key={tag.name}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border"
+              style={{
+                borderColor: tag.color,
+                backgroundColor: `${tag.color}22`,
+                color: tag.color,
+              }}
+            >
+              #{tag.name}
+              <button
+                type="button"
+                onClick={() => removeTag(tag.name)}
+                className="leading-none opacity-60 hover:opacity-100 transition-opacity"
+                aria-label={`Remover tag ${tag.name}`}
+              >
+                ✕
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Paleta de cores */}
+      <div className="flex gap-1.5 mb-2 items-center">
+        <span className="text-[10px] text-text-muted shrink-0">Cor:</span>
+        {TAG_COLORS.map((c) => (
+          <button
+            key={c.hex}
+            type="button"
+            title={c.label}
+            onClick={() => setSelectedColor(c.hex)}
+            className="w-5 h-5 rounded-full border-2 transition-transform hover:scale-110"
+            style={{
+              backgroundColor: c.hex,
+              borderColor: selectedColor === c.hex ? '#ffffff' : 'transparent',
+              outline: selectedColor === c.hex ? `2px solid ${c.hex}` : 'none',
+              outlineOffset: '1px',
+            }}
+            aria-label={`Selecionar cor ${c.label}`}
+          />
+        ))}
+      </div>
+
+      {/* Input + botão */}
+      <div className="flex gap-2">
+        <input
+          id="sheet-tag-input"
+          type="text"
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Nome da tag... (Enter para adicionar)"
+          className="input-medieval flex-1 text-xs"
+        />
+        <button
+          type="button"
+          onClick={addTag}
+          disabled={!inputValue.trim()}
+          className="btn-secondary text-xs py-1.5 px-3 disabled:opacity-40"
+        >
+          + Adicionar
+        </button>
+      </div>
+    </div>
+  );
 }
 
 // ---- Sub-componente: Stat Box de Atributo ----
@@ -98,9 +225,10 @@ interface SheetFormProps {
   sheet: CharacterSheet;
   onSave: (sheet: CharacterSheet) => void;
   onCancel: () => void;
+  onAutoSave?: (sheet: CharacterSheet) => void;
 }
 
-function SheetForm({ sheet: initialSheet, onSave, onCancel }: SheetFormProps) {
+function SheetForm({ sheet: initialSheet, onSave, onCancel, onAutoSave }: SheetFormProps) {
   const [sheet, setSheet] = useState<CharacterSheet>(initialSheet);
 
   const [hpCurrentInput, setHpCurrentInput] = useState<string>(String(sheet.hpCurrent));
@@ -359,6 +487,18 @@ function SheetForm({ sheet: initialSheet, onSave, onCancel }: SheetFormProps) {
             className="input-medieval resize-y selectable"
           />
         </div>
+
+        {/* Tags */}
+        <TagInput
+          tags={sheet.tags ?? []}
+          onChange={(tags) => {
+            const updatedSheet = { ...sheet, tags, updatedAt: new Date().toISOString() };
+            setSheet(updatedSheet);
+            if (onAutoSave && updatedSheet.name.trim()) {
+              onAutoSave(updatedSheet);
+            }
+          }}
+        />
       </div>
     </div>
   );
@@ -427,6 +567,25 @@ function SheetCard({ sheet, isSelected, onSelect, onDelete }: SheetCardProps) {
         </span>
         <span className="text-xs text-text-muted">CA {sheet.armorClass}</span>
       </div>
+
+      {/* Tags */}
+      {sheet.tags && sheet.tags.length > 0 && (
+        <div className="flex flex-wrap gap-1 mt-2">
+          {sheet.tags.map((tag) => (
+            <span
+              key={tag.name}
+              className="inline-block px-1.5 py-0.5 rounded-full text-[9px] font-medium border"
+              style={{
+                borderColor: tag.color,
+                backgroundColor: `${tag.color}1a`,
+                color: tag.color,
+              }}
+            >
+              #{tag.name}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -467,7 +626,14 @@ export default function SheetsView() {
 
   const filteredSheets = sheets
     .filter((s) => filterType === 'all' || s.type === filterType)
-    .filter((s) => !searchQuery || s.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    .filter((s) => {
+      if (!searchQuery) return true;
+      const q = searchQuery.toLowerCase();
+      const matchesName = s.name.toLowerCase().includes(q);
+      // Busca em tag.name (novo formato objeto { name, color })
+      const matchesTag = (s.tags ?? []).some((tag) => tag.name.includes(q));
+      return matchesName || matchesTag;
+    });
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -568,6 +734,7 @@ export default function SheetsView() {
             sheet={editingSheet}
             onSave={handleSaveSheet}
             onCancel={() => setEditingSheet(null)}
+            onAutoSave={saveSheet}
           />
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-center px-8">
