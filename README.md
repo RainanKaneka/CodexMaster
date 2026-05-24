@@ -24,27 +24,31 @@ Seus dados pertencem a você. O sistema usa um banco de dados local (`db.json`) 
 ### 📚 Compêndio Dinâmico
 Pesquise, filtre e consulte magias, itens e equipamentos em tempo real na mesa sem interromper a narrativa.
 
-> *[Screenshot placeholder do Compêndio]*
+<img width="1418" height="829" alt="image" src="https://github.com/user-attachments/assets/51c4b777-c1eb-44e1-819e-b6a0431285ce" />
 
 ### ⚔️ Combat Tracker (Rastreador de Iniciativa)
 Monte seus encontros puxando monstros do banco de dados e jogue-os diretamente na arena. O sistema lida com as rolagens de iniciativa automatizadas para você focar apenas em rolar o dano.
 
-> *[Screenshot placeholder do Combat Tracker]*
+<img width="1419" height="832" alt="image" src="https://github.com/user-attachments/assets/63b57f4b-93ef-4b25-bcae-a26b3927b0b5" />
+
 
 ### 🗺️ Enciclopédia de Lore (World-building)
 Uma wiki estilo Obsidian integrada ao app. Crie documentos Markdown ilimitados, organize o mundo em pastas (com suporte nativo a Drag & Drop), copie e cole imagens e crie Links Internos (`[[Nome da Nota]]`) para interconectar NPCs, cidades e eventos.
 
-> *[Screenshot placeholder da Enciclopédia de Lore]*
+<img width="1416" height="829" alt="image" src="https://github.com/user-attachments/assets/4b302a06-c2cd-4fe9-88e3-f51944a683ed" />
+
 
 ### ✍️ Diário de Campanha
 Nunca mais esqueça em qual cidade os heróis pararam. Mantenha uma linha do tempo elegante com os resumos das sessões em Markdown e gerencie os "Ganchos de Aventura" (Plots pendentes) em um checklist lateral de acesso rápido.
 
-> *[Screenshot placeholder do Diário de Campanha]*
+<img width="1421" height="830" alt="image" src="https://github.com/user-attachments/assets/6a089dbd-5cb6-4258-a5ca-c4067e1d4021" />
+
 
 ### 🎲 Tabelas de Rolagem e Geradores
 O grupo fez algo inesperado? Sem problema. Crie as suas próprias Tabelas de Saque ou Encontros com rolagens animadas de dados. Utilize também os nossos 5 geradores estáticos de emergência (Boatos de Taverna, Clima, Nomes de PNJs, Mercador e Ganchos).
 
-> *[Screenshot placeholder das Tabelas de Rolagem]*
+<img width="1419" height="832" alt="image" src="https://github.com/user-attachments/assets/5993502c-8f79-4460-8937-2bc4d89eef05" />
+
 
 ---
 
