@@ -1,7 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { MapData, MapPin } from '../../main/types';
+import { MapData, MapPin, CharacterSheet } from '../../main/types';
 import { useDatabase } from '../context/DatabaseContext';
 import { generateId } from '../utils/dnd5e';
+import CharacterAvatar from '../components/CharacterAvatar';
 
 // =============================================================================
 // MapsView — Módulo de Mapas Interativos (Issue #5: Painel de Edição Lateral)
@@ -113,6 +114,7 @@ function MapPinMarker({ pin, isSelected, showLabels, onClick }: MapPinMarkerProp
 
 interface PinEditorPanelProps {
   pin: MapPin;
+  sheets: CharacterSheet[];
   /** Chamado com o pin atualizado toda vez que o usuário altera um campo. */
   onFieldChange: (updatedPin: MapPin) => void;
   onDelete: () => void;
@@ -120,9 +122,10 @@ interface PinEditorPanelProps {
   isSaving: boolean;
 }
 
-function PinEditorPanel({ pin, onFieldChange, onDelete, onClose, isSaving }: PinEditorPanelProps) {
+function PinEditorPanel({ pin, sheets, onFieldChange, onDelete, onClose, isSaving }: PinEditorPanelProps) {
   // Estado local espelha o pin selecionado; sincroniza quando o pin muda.
   const [localPin, setLocalPin] = useState<MapPin>(pin);
+  const [selectedAvatarId, setSelectedAvatarId] = useState<string | null>(null);
 
   // Re-sincroniza quando o pin selecionado muda (ex: clique em outro pin).
   useEffect(() => {
@@ -202,6 +205,49 @@ function PinEditorPanel({ pin, onFieldChange, onDelete, onClose, isSaving }: Pin
             rows={10}
             className="input-medieval text-sm resize-y selectable flex-1"
           />
+        </div>
+
+        {/* Habitantes / Entidades Vinculadas */}
+        <div className="flex flex-col gap-3 p-3 rounded-md bg-codex-bg border border-codex-border">
+          <p className="text-[10px] text-text-muted uppercase tracking-wider">Habitantes</p>
+          
+          <div className="flex gap-2">
+            <select
+              className="input-medieval text-xs flex-1"
+              value=""
+              onChange={(e) => {
+                const id = e.target.value;
+                if (id && !localPin.linkedEntities?.includes(id)) {
+                  const newEntities = [...(localPin.linkedEntities || []), id];
+                  handleChange('linkedEntities', newEntities);
+                }
+              }}
+            >
+              <option value="" disabled>Vincular Ficha...</option>
+              {sheets
+                .filter(s => !localPin.linkedEntities?.includes(s.id))
+                .map(s => <option key={s.id} value={s.id}>{s.name}</option>)
+              }
+            </select>
+          </div>
+
+          <div className="flex flex-wrap gap-2 mt-1">
+            {(localPin.linkedEntities || []).map(id => {
+              const char = sheets.find(s => s.id === id);
+              if (!char) return null;
+              return (
+                <CharacterAvatar 
+                  key={id} 
+                  name={char.name} 
+                  size="md" 
+                  onClick={() => setSelectedAvatarId(id)} 
+                />
+              );
+            })}
+            {(!localPin.linkedEntities || localPin.linkedEntities.length === 0) && (
+              <span className="text-xs text-text-muted italic">Nenhuma ficha vinculada.</span>
+            )}
+          </div>
         </div>
 
         {/* Campo: Aparência Visual */}
@@ -286,6 +332,60 @@ function PinEditorPanel({ pin, onFieldChange, onDelete, onClose, isSaving }: Pin
           Fechar
         </button>
       </div>
+
+      {/* Modal Resumo NPC */}
+      {selectedAvatarId && (() => {
+        const char = sheets.find(s => s.id === selectedAvatarId);
+        if (!char) return null;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div 
+              className="bg-codex-surface border border-codex-border rounded-lg shadow-2xl p-5 max-w-sm w-full relative animate-fade-in"
+              onClick={e => e.stopPropagation()}
+            >
+              <button 
+                onClick={(e) => { e.stopPropagation(); setSelectedAvatarId(null); }}
+                className="absolute top-3 right-3 w-6 h-6 flex items-center justify-center text-text-muted hover:text-white rounded hover:bg-codex-surface2"
+              >
+                ✕
+              </button>
+              <div className="flex items-center gap-4 mb-4 mt-2">
+                <CharacterAvatar name={char.name} size="lg" />
+                <div>
+                  <h3 className="font-heading text-xl text-gold-primary leading-tight">{char.name}</h3>
+                  <p className="text-xs text-text-secondary">{char.type === 'player' ? 'Jogador' : 'Criatura'}</p>
+                </div>
+              </div>
+              <div className="flex justify-between text-sm mb-6 bg-codex-bg p-3 rounded border border-codex-border">
+                <div className="text-center">
+                  <p className="text-text-muted text-[10px] uppercase">HP</p>
+                  <p className="font-bold text-crimson-primary">{char.hpCurrent}/{char.hpMax}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-text-muted text-[10px] uppercase">CA</p>
+                  <p className="font-bold text-gold-primary">{char.armorClass}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-text-muted text-[10px] uppercase">Lvl/ND</p>
+                  <p className="font-bold text-white">{char.levelOrCR}</p>
+                </div>
+              </div>
+              <button 
+                className="btn-primary w-full text-sm py-2"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  localStorage.setItem('codex-nav-target', char.id);
+                  window.dispatchEvent(new CustomEvent('codex-navigate', { detail: { view: 'sheets', targetId: char.id } }));
+                  setSelectedAvatarId(null);
+                  onClose();
+                }}
+              >
+                Ver Ficha Completa
+              </button>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -293,7 +393,7 @@ function PinEditorPanel({ pin, onFieldChange, onDelete, onClose, isSaving }: Pin
 // ---- View Principal ----
 
 export default function MapsView() {
-  const { maps, saveMap, deleteMap } = useDatabase();
+  const { maps, sheets, saveMap, deleteMap } = useDatabase();
   const [selectedMapId, setSelectedMapId] = useState<string | null>(null);
   const [selectedPinId, setSelectedPinId] = useState<string | null>(null);
   const [isLoadingImage, setIsLoadingImage] = useState(false);
@@ -572,6 +672,7 @@ export default function MapsView() {
                 <PinEditorPanel
                   key={selectedPinId}
                   pin={selectedPin}
+                  sheets={sheets}
                   onFieldChange={handlePinFieldChange}
                   onDelete={handleDeletePin}
                   onClose={handleClosePanel}

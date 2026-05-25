@@ -849,6 +849,34 @@ export default function SheetsView() {
     setSelectedId(null);
   };
 
+  // Escutar eventos de navegação externa (ex: Módulo de Mapas pedindo para abrir uma ficha)
+  useEffect(() => {
+    // 1. Consumir payload pendente caso o componente tenha acabado de ser montado pela navegação
+    const pendingTargetId = localStorage.getItem('codex-nav-target');
+    if (pendingTargetId) {
+      const targetSheet = sheets.find(s => s.id === pendingTargetId);
+      if (targetSheet) {
+        setSelectedId(targetSheet.id);
+        setEditingSheet({ ...targetSheet });
+      }
+      localStorage.removeItem('codex-nav-target');
+    }
+
+    // 2. Manter listener para caso a view já estivesse montada em possíveis cenários paralelos futuros
+    const handleNavigate = (e: Event) => {
+      const customEvent = e as CustomEvent<{ view: string; targetId?: string }>;
+      if (customEvent.detail?.view === 'sheets' && customEvent.detail?.targetId) {
+        const targetSheet = sheets.find(s => s.id === customEvent.detail.targetId);
+        if (targetSheet) {
+          setSelectedId(targetSheet.id);
+          setEditingSheet({ ...targetSheet });
+        }
+      }
+    };
+    window.addEventListener('codex-navigate', handleNavigate);
+    return () => window.removeEventListener('codex-navigate', handleNavigate);
+  }, [sheets]);
+
   const handleSelectSheet = (sheet: CharacterSheet) => {
     setSelectedId(sheet.id);
     setEditingSheet({ ...sheet });

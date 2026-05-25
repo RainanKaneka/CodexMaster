@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DatabaseProvider } from './context/DatabaseContext';
 import Sidebar, { ActiveView } from './components/Sidebar';
 import DicePanel from './components/DicePanel';
@@ -35,6 +35,18 @@ function AppContent() {
       default:            return <SheetsView />;
     }
   };
+
+  // Listener global para navegação cross-module
+  React.useEffect(() => {
+    const handleNavigate = (e: Event) => {
+      const customEvent = e as CustomEvent<{ view: ActiveView }>;
+      if (customEvent.detail?.view) {
+        setActiveView(customEvent.detail.view);
+      }
+    };
+    window.addEventListener('codex-navigate', handleNavigate);
+    return () => window.removeEventListener('codex-navigate', handleNavigate);
+  }, []);
 
   return (
     <div

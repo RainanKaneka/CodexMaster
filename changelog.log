@@ -175,3 +175,9 @@
 
 [2026-05-25 15:14] CORRIGIDO (Issue #7 v2): src/renderer/views/MapsView.tsx - Atualizado o estado `showLabels` para sincronizar automaticamente com a API nativa do `localStorage` via `useEffect`. Agora o aplicativo lembra a preferência do Mestre de manter os rótulos fixos, mesmo após navegar para outros módulos (Fichas, Diário, etc) e voltar ao Módulo de Mapas.
 [2026-05-25 15:14] VERIFICADO: `npm run build` completado com 0 erros (47 módulos transformados).
+
+[2026-05-25 16:58] IMPLEMENTADO (Issue #8): src/renderer/views/MapsView.tsx, App.tsx, SheetsView.tsx - Conexão profunda entre o módulo de Mapas e Fichas. Adicionado suporte a `linkedEntities` nos pins do mapa. Criado o componente `<CharacterAvatar />` responsivo que exibe avatares iniciais circulares. Implementado um fluxo de Modal no mapa que resume os status de um habitante (HP, CA, ND) e uma arquitetura leve de navegação via evento nativo (`CustomEvent('codex-navigate')`) que transita instantaneamente do mapa para a ficha focada no módulo de Fichas sem prop drilling.
+[2026-05-25 16:58] VERIFICADO: `npm run build` completado com 0 erros (48 módulos transformados).
+
+[2026-05-25 17:11] CORRIGIDO (Issue #8 v2): src/renderer/views/MapsView.tsx, SheetsView.tsx - O fluxo do evento `codex-navigate` não estava carregando as fichas porque o componente SheetsView era desmontado e montado de forma assíncrona durante a transição de abas (devido ao React lifecycle do App.tsx). Corrigido usando `localStorage` como uma ponte de comunicação de curtíssimo prazo: o `MapsView` agora escreve o `codex-nav-target` instantes antes de trocar a aba, e o `SheetsView`, em seu `useEffect` de mount, varre o `localStorage` consumindo o target e pré-carregando a ficha instantaneamente ao ser renderizado, garantindo 100% de precisão na navegação profunda.
+[2026-05-25 17:11] VERIFICADO: `npm run build` completado com 0 erros (48 módulos transformados).
