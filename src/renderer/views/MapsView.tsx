@@ -34,10 +34,11 @@ function darkenHexColor(hex: string, amount: number = 20): string {
 interface MapPinMarkerProps {
   pin: MapPin;
   isSelected: boolean;
+  showLabels: boolean;
   onClick: () => void;
 }
 
-function MapPinMarker({ pin, isSelected, onClick }: MapPinMarkerProps) {
+function MapPinMarker({ pin, isSelected, showLabels, onClick }: MapPinMarkerProps) {
   // Cores dinâmicas
   const defaultBg = '#8b2a3a'; // bg-crimson-primary original
   const bgColor = pin.color || defaultBg;
@@ -85,16 +86,18 @@ function MapPinMarker({ pin, isSelected, onClick }: MapPinMarkerProps) {
             : `0 2px 4px rgba(0,0,0,0.3), inset 0 2px 4px rgba(0,0,0,0.15)`
         }}
       />
-      {/* Label flutuante */}
+      {/* Label flutuante ou fixo */}
       {pin.title && (
-        <div className="
+        <div className={`
           absolute bottom-full mb-1 left-1/2 -translate-x-1/2
           px-2 py-0.5 rounded text-[10px] font-body font-medium
-          bg-codex-surface border border-codex-border text-text-primary
-          whitespace-nowrap shadow-md
-          opacity-0 group-hover:opacity-100 transition-opacity duration-150
-          pointer-events-none
-        ">
+          whitespace-nowrap shadow-md pointer-events-none
+          transition-opacity duration-150
+          ${showLabels 
+            ? 'opacity-100 bg-codex-surface/80 border border-codex-border text-text-primary backdrop-blur-sm' 
+            : 'opacity-0 group-hover:opacity-100 bg-codex-surface border border-codex-border text-text-primary'
+          }
+        `}>
           {pin.title}
         </div>
       )}
@@ -295,6 +298,15 @@ export default function MapsView() {
   const [selectedPinId, setSelectedPinId] = useState<string | null>(null);
   const [isLoadingImage, setIsLoadingImage] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  
+  // Persiste a preferência de mostrar rótulos no localStorage
+  const [showLabels, setShowLabels] = useState(() => {
+    return localStorage.getItem('showMapLabels') === 'true';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('showMapLabels', showLabels.toString());
+  }, [showLabels]);
 
   const mapContainerRef = useRef<HTMLDivElement>(null);
   // Debounce ref para agrupar saves rápidos enquanto o usuário digita
@@ -501,9 +513,17 @@ export default function MapsView() {
                   <span className="opacity-70">Botão direito no mapa para adicionar um pin</span>
                 </p>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setShowLabels(!showLabels)}
+                  className={`btn-secondary flex items-center gap-1.5 text-xs py-1 px-2.5 transition-colors ${showLabels ? 'bg-codex-surface2 border-gold-dim text-gold-primary' : 'opacity-70 hover:opacity-100'}`}
+                  title={showLabels ? "Ocultar títulos dos locais no mapa" : "Mostrar todos os títulos dos locais no mapa"}
+                >
+                  <span className="text-sm">👁️</span>
+                  {showLabels ? 'Ocultar Nomes' : 'Mostrar Nomes'}
+                </button>
                 {isPanelOpen && (
-                  <span className="text-xs text-gold-primary animate-pulse-gold">
+                  <span className="text-xs text-gold-primary animate-pulse-gold whitespace-nowrap">
                     📍 {selectedPin?.title || 'Pin selecionado'}
                   </span>
                 )}
@@ -540,6 +560,7 @@ export default function MapsView() {
                       key={pin.id}
                       pin={pin}
                       isSelected={selectedPinId === pin.id}
+                      showLabels={showLabels}
                       onClick={() => setSelectedPinId(pin.id)}
                     />
                   ))}

@@ -169,3 +169,9 @@
 
 [2026-05-25 14:54] DESIGN ELITE (Issue #6 v4): src/renderer/views/MapsView.tsx - Refatoração visual completa do `MapPinMarker`. (1) Seleção não sobrescreve mais a cor de fundo nativa/customizada, servindo apenas para adicionar um anel luminoso dourado (`boxShadow: ... 12px goldHex, inset ...`). (2) Bordas sólidas grosseiras removidas e substituídas por `1px solid` dinâmico (5-10% mais escuro que a cor de fundo via ajuste em `darkenHexColor(bgColor, 20)`) em conjunto com sombras `inset 0 2px 4px rgba(...)` para gerar profundidade esférica sutil e super polida, muito mais condizente com a "beleza moderna".
 [2026-05-25 14:54] VERIFICADO: `npm run build` completado com 0 erros (47 módulos transformados).
+
+[2026-05-25 15:06] IMPLEMENTADO (Issue #7): src/renderer/views/MapsView.tsx - Criado estado `showLabels` para fixar a visibilidade de todos os rótulos de mapas. Adicionado botão de toggle ("Mostrar Nomes" / "Ocultar Nomes") com ícone de olho (👁️) na barra superior do mapa. O componente `MapPinMarker` foi atualizado para receber essa prop e exibir permanentemente os títulos, usando um fundo elegante semi-transparente (`bg-codex-surface/80 backdrop-blur-sm`) que garante alta legibilidade do texto (`text-text-primary`) contra fundos claros ou escuros de mapas, mantendo o comportamento de hover como fallback.
+[2026-05-25 15:06] VERIFICADO: `npm run build` completado com 0 erros (47 módulos transformados).
+
+[2026-05-25 15:14] CORRIGIDO (Issue #7 v2): src/renderer/views/MapsView.tsx - Atualizado o estado `showLabels` para sincronizar automaticamente com a API nativa do `localStorage` via `useEffect`. Agora o aplicativo lembra a preferência do Mestre de manter os rótulos fixos, mesmo após navegar para outros módulos (Fichas, Diário, etc) e voltar ao Módulo de Mapas.
+[2026-05-25 15:14] VERIFICADO: `npm run build` completado com 0 erros (47 módulos transformados).
