@@ -54,6 +54,23 @@ export interface CharacterSheet {
    * Campo opcional para retrocompatibilidade com fichas anteriores.
    */
   tags?: { name: string; color: string }[];
+  /**
+   * Barras de recursos customizadas independentes do PV (v1.1 Issue #4).
+   * Ex: Mana, Energia, Ki, Sanidade, Selos de Feitiçaria.
+   * Campo opcional para retrocompatibilidade com fichas anteriores.
+   */
+  customMetrics?: {
+    /** ID único gerado via generateId() para permitir edição/remoção segura */
+    id: string;
+    /** Nome exibido na barra (ex: "Mana", "Ki", "Sanidade") */
+    name: string;
+    /** Valor atual do recurso (0 ≤ current ≤ max) */
+    current: number;
+    /** Valor máximo do recurso (mínimo 1) */
+    max: number;
+    /** Código hexadecimal da cor da barra (ex: "#4a7fa5") */
+    color: string;
+  }[];
   /** Timestamp ISO 8601 de criação da ficha */
   createdAt: string;
   /** Timestamp ISO 8601 da última modificação */

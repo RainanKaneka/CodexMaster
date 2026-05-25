@@ -35,6 +35,7 @@ function createEmptySheet(type: 'player' | 'creature'): CharacterSheet {
     speed: 9,
     notes: '',
     tags: [],
+    customMetrics: [],
     createdAt: now,
     updatedAt: now,
   };
@@ -215,6 +216,217 @@ function StatBox({ attrKey, value, onChange }: StatBoxProps) {
       <span className={`stat-modifier ${modifier >= 0 ? 'text-gold-primary' : 'text-crimson-bright'}`}>
         {formatModifier(modifier)}
       </span>
+    </div>
+  );
+}
+
+// ---- Sub-componente: Editor de Métricas Customizadas ----
+
+/** Paleta de cores para barras de métrica */
+const METRIC_COLORS = [
+  { hex: '#4a7fa5', label: 'Azul (Mana)' },
+  { hex: '#4a8a5a', label: 'Verde (Vida)' },
+  { hex: '#b8973a', label: 'Ouro (Ki)' },
+  { hex: '#7a4a9a', label: 'Púrpura (Arcano)' },
+  { hex: '#a83232', label: 'Vermelho (Furia)' },
+  { hex: '#8a6a3a', label: 'Bronze' },
+  { hex: '#5a7a7a', label: 'Ardósia' },
+  { hex: '#a06060', label: 'Rosé' },
+];
+
+type CustomMetric = NonNullable<import('../../main/types').CharacterSheet['customMetrics']>[number];
+
+interface CustomMetricsEditorProps {
+  metrics: CustomMetric[];
+  onChange: (metrics: CustomMetric[]) => void;
+}
+
+function CustomMetricsEditor({ metrics, onChange }: CustomMetricsEditorProps) {
+  const [newName, setNewName] = useState('');
+  const [newMax, setNewMax] = useState('10');
+  const [newColor, setNewColor] = useState(METRIC_COLORS[0].hex);
+
+  const addMetric = () => {
+    const trimmed = newName.trim();
+    const maxVal = Math.max(1, parseInt(newMax, 10) || 10);
+    if (!trimmed) return;
+    const metric: CustomMetric = {
+      id: generateId(),
+      name: trimmed,
+      current: maxVal,
+      max: maxVal,
+      color: newColor,
+    };
+    onChange([...metrics, metric]);
+    setNewName('');
+    setNewMax('10');
+  };
+
+  const removeMetric = (id: string) => {
+    onChange(metrics.filter((m) => m.id !== id));
+  };
+
+  const updateCurrent = (id: string, delta: number) => {
+    onChange(
+      metrics.map((m) =>
+        m.id === id
+          ? { ...m, current: Math.max(0, Math.min(m.max, m.current + delta)) }
+          : m
+      )
+    );
+  };
+
+  const updateCurrentDirect = (id: string, raw: string) => {
+    const val = parseInt(raw, 10);
+    if (isNaN(val)) return;
+    onChange(
+      metrics.map((m) =>
+        m.id === id
+          ? { ...m, current: Math.max(0, Math.min(m.max, val)) }
+          : m
+      )
+    );
+  };
+
+  const updateMax = (id: string, raw: string) => {
+    const val = Math.max(1, parseInt(raw, 10) || 1);
+    onChange(
+      metrics.map((m) =>
+        m.id === id
+          ? { ...m, max: val, current: Math.min(m.current, val) }
+          : m
+      )
+    );
+  };
+
+  return (
+    <div>
+      <p className="section-title mb-3">Métricas Customizadas</p>
+
+      {/* Lista de métricas existentes */}
+      {metrics.length > 0 && (
+        <div className="flex flex-col gap-3 mb-4">
+          {metrics.map((m) => {
+            const pct = m.max > 0 ? (m.current / m.max) * 100 : 0;
+            return (
+              <div key={m.id} className="bg-codex-bg rounded-lg p-3 border border-codex-border">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span
+                    className="text-xs font-medium"
+                    style={{ color: m.color }}
+                  >
+                    {m.name}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeMetric(m.id)}
+                    className="text-text-muted hover:text-crimson-bright text-xs transition-colors"
+                    aria-label={`Remover métrica ${m.name}`}
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Barra de progresso */}
+                <div className="h-2 bg-codex-surface rounded-full overflow-hidden mb-2">
+                  <div
+                    className="h-full rounded-full transition-all duration-300"
+                    style={{ width: `${Math.min(100, pct)}%`, backgroundColor: m.color }}
+                  />
+                </div>
+
+                {/* Controles + / - / input atual / max */}
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => updateCurrent(m.id, -1)}
+                    className="w-6 h-6 rounded-md bg-codex-surface border border-codex-border text-text-muted hover:text-crimson-bright hover:border-crimson-muted transition-colors text-sm leading-none"
+                    aria-label={`Diminuir ${m.name}`}
+                  >
+                    −
+                  </button>
+                  <input
+                    type="number"
+                    value={m.current}
+                    onChange={(e) => updateCurrentDirect(m.id, e.target.value)}
+                    className="w-12 text-center bg-transparent border-b border-codex-border text-text-primary text-xs outline-none focus:border-gold-dim [-moz-appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    aria-label={`Valor atual de ${m.name}`}
+                  />
+                  <span className="text-text-muted text-xs">/</span>
+                  <input
+                    type="number"
+                    value={m.max}
+                    onChange={(e) => updateMax(m.id, e.target.value)}
+                    className="w-12 text-center bg-transparent border-b border-codex-border text-text-muted text-xs outline-none focus:border-gold-dim [-moz-appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    aria-label={`Valor máximo de ${m.name}`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => updateCurrent(m.id, 1)}
+                    className="w-6 h-6 rounded-md bg-codex-surface border border-codex-border text-text-muted hover:text-gold-primary hover:border-gold-dim transition-colors text-sm leading-none"
+                    aria-label={`Aumentar ${m.name}`}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Formulário de nova métrica */}
+      <div className="bg-codex-bg rounded-lg p-3 border border-dashed border-codex-border">
+        <p className="text-[10px] text-text-muted mb-2 uppercase tracking-wider">Nova métrica</p>
+        <div className="flex gap-2 mb-2">
+          <input
+            id="metric-name-input"
+            type="text"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addMetric(); } }}
+            placeholder="Ex: Mana, Ki, Sanidade..."
+            className="input-medieval flex-1 text-xs"
+          />
+          <input
+            id="metric-max-input"
+            type="number"
+            value={newMax}
+            onChange={(e) => setNewMax(e.target.value)}
+            className="input-medieval w-16 text-center text-xs"
+            aria-label="Valor máximo da nova métrica"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-text-muted shrink-0">Cor:</span>
+          <div className="flex gap-1.5 flex-1">
+            {METRIC_COLORS.map((c) => (
+              <button
+                key={c.hex}
+                type="button"
+                title={c.label}
+                onClick={() => setNewColor(c.hex)}
+                className="w-5 h-5 rounded-full border-2 transition-transform hover:scale-110"
+                style={{
+                  backgroundColor: c.hex,
+                  borderColor: newColor === c.hex ? '#ffffff' : 'transparent',
+                  outline: newColor === c.hex ? `2px solid ${c.hex}` : 'none',
+                  outlineOffset: '1px',
+                }}
+                aria-label={`Selecionar cor ${c.label}`}
+              />
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={addMetric}
+            disabled={!newName.trim()}
+            className="btn-secondary text-xs py-1.5 px-3 disabled:opacity-40 shrink-0"
+          >
+            + Adicionar
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -499,6 +711,18 @@ function SheetForm({ sheet: initialSheet, onSave, onCancel, onAutoSave }: SheetF
             }
           }}
         />
+
+        {/* Métricas Customizadas */}
+        <CustomMetricsEditor
+          metrics={sheet.customMetrics ?? []}
+          onChange={(customMetrics) => {
+            const updatedSheet = { ...sheet, customMetrics, updatedAt: new Date().toISOString() };
+            setSheet(updatedSheet);
+            if (onAutoSave && updatedSheet.name.trim()) {
+              onAutoSave(updatedSheet);
+            }
+          }}
+        />
       </div>
     </div>
   );
@@ -584,6 +808,27 @@ function SheetCard({ sheet, isSelected, onSelect, onDelete }: SheetCardProps) {
               #{tag.name}
             </span>
           ))}
+        </div>
+      )}
+
+      {/* Mini-barras de métricas customizadas */}
+      {sheet.customMetrics && sheet.customMetrics.length > 0 && (
+        <div className="flex flex-col gap-1 mt-2">
+          {sheet.customMetrics.map((m) => {
+            const pct = m.max > 0 ? (m.current / m.max) * 100 : 0;
+            return (
+              <div key={m.id} className="flex items-center gap-1.5">
+                <span className="text-[9px] w-12 truncate" style={{ color: m.color }}>{m.name}</span>
+                <div className="flex-1 h-1 bg-codex-bg rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full"
+                    style={{ width: `${Math.min(100, pct)}%`, backgroundColor: m.color }}
+                  />
+                </div>
+                <span className="text-[9px] text-text-muted font-mono">{m.current}/{m.max}</span>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
