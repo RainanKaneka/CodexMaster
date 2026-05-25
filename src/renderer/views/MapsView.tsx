@@ -17,6 +17,20 @@ import { generateId } from '../utils/dnd5e';
 
 // ---- Sub-componente: Pin Visual no Mapa ----
 
+/** Escurece um valor hexadecimal suavemente (5-10%) para a nova borda elegante */
+function darkenHexColor(hex: string, amount: number = 20): string {
+  hex = hex.replace(/^#/, '');
+  if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+  const num = parseInt(hex, 16);
+  if (isNaN(num)) return '#000000';
+  
+  const r = Math.max(0, Math.min(255, (num >> 16) - amount));
+  const g = Math.max(0, Math.min(255, ((num >> 8) & 0x00FF) - amount));
+  const b = Math.max(0, Math.min(255, (num & 0x0000FF) - amount));
+  
+  return `#${(1 << 24 | r << 16 | g << 8 | b).toString(16).slice(1)}`;
+}
+
 interface MapPinMarkerProps {
   pin: MapPin;
   isSelected: boolean;
@@ -24,6 +38,12 @@ interface MapPinMarkerProps {
 }
 
 function MapPinMarker({ pin, isSelected, onClick }: MapPinMarkerProps) {
+  // Cores dinâmicas
+  const defaultBg = '#8b2a3a'; // bg-crimson-primary original
+  const bgColor = pin.color || defaultBg;
+  const borderColor = darkenHexColor(bgColor, 20); // Borda apenas ligeiramente mais escura que o fundo
+  const goldHex = '#c9a84c'; // gold-primary para o anel de seleção
+
   return (
     <button
       id={`map-pin-${pin.id}`}
@@ -34,7 +54,7 @@ function MapPinMarker({ pin, isSelected, onClick }: MapPinMarkerProps) {
         // Posicionamento percentual conforme regra de responsividade do direcao.md
         left: `${pin.coordinateX}%`,
         top:  `${pin.coordinateY}%`,
-        transform: 'translate(-50%, -100%)',
+        transform: `translate(-50%, -100%) scale(${pin.scale || 1.0})`,
       }}
       className="
         absolute z-10
@@ -45,19 +65,26 @@ function MapPinMarker({ pin, isSelected, onClick }: MapPinMarkerProps) {
       "
     >
       {/* Haste do pin */}
-      <div className={`
-        w-0.5 h-4 transition-all duration-150
-        ${isSelected ? 'bg-gold-primary h-5' : 'bg-crimson-primary group-hover:bg-crimson-bright'}
-      `} />
+      <div 
+        className={`w-0.5 transition-all duration-150 ${isSelected ? 'h-5' : 'h-4'}`}
+        style={{ backgroundColor: bgColor }}
+      />
       {/* Cabeça do pin */}
-      <div className={`
-        w-4 h-4 rounded-full border-2 shadow-md -mt-4
-        transition-all duration-150
-        ${isSelected
-          ? 'bg-gold-primary border-gold-muted shadow-gold-glow w-5 h-5'
-          : 'bg-crimson-primary border-crimson-muted group-hover:bg-crimson-bright group-hover:shadow-crimson-glow'
-        }
-      `} />
+      <div 
+        className={`
+          rounded-full -mt-4
+          transition-all duration-150
+          ${isSelected ? 'w-5 h-5' : 'w-4 h-4'}
+        `}
+        style={{
+          backgroundColor: bgColor,
+          border: `1px solid ${isSelected ? goldHex : borderColor}`,
+          // Inset shadow suave para volume (profundidade) + sombra projetada/brilho
+          boxShadow: isSelected 
+            ? `0 0 12px rgba(201, 168, 76, 0.6), inset 0 2px 4px rgba(0,0,0,0.15)` 
+            : `0 2px 4px rgba(0,0,0,0.3), inset 0 2px 4px rgba(0,0,0,0.15)`
+        }}
+      />
       {/* Label flutuante */}
       {pin.title && (
         <div className="
@@ -172,6 +199,55 @@ function PinEditorPanel({ pin, onFieldChange, onDelete, onClose, isSaving }: Pin
             rows={10}
             className="input-medieval text-sm resize-y selectable flex-1"
           />
+        </div>
+
+        {/* Campo: Aparência Visual */}
+        <div className="flex flex-col gap-3 p-3 rounded-md bg-codex-bg border border-codex-border">
+          <p className="text-[10px] text-text-muted uppercase tracking-wider">Aparência do Marcador</p>
+          
+          {/* Cor */}
+          <div className="flex items-center justify-between">
+            <label htmlFor="pin-color" className="text-xs text-text-secondary">Cor Customizada</label>
+            <div className="flex items-center gap-2">
+              <input
+                id="pin-color"
+                type="color"
+                value={localPin.color || '#e53e3e'}
+                onChange={(e) => handleChange('color', e.target.value)}
+                className="w-6 h-6 rounded cursor-pointer border-0 bg-transparent p-0"
+                title="Escolher cor do pin"
+              />
+              <button 
+                type="button" 
+                onClick={() => handleChange('color', undefined as any)}
+                className="text-[10px] text-text-muted hover:text-gold-primary transition-colors"
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+
+          {/* Tamanho (Scale) */}
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center justify-between">
+              <label htmlFor="pin-scale" className="text-xs text-text-secondary">Tamanho</label>
+              <span className="text-[10px] text-text-muted font-mono">{localPin.scale?.toFixed(1) || '1.0'}x</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-text-muted">P</span>
+              <input
+                id="pin-scale"
+                type="range"
+                min="0.5"
+                max="3.0"
+                step="0.1"
+                value={localPin.scale || 1.0}
+                onChange={(e) => handleChange('scale', parseFloat(e.target.value))}
+                className="flex-1 accent-gold-primary cursor-pointer"
+              />
+              <span className="text-[10px] text-text-muted">G</span>
+            </div>
+          </div>
         </div>
 
         {/* Metadados do pin (somente leitura) */}

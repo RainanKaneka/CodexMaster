@@ -96,6 +96,10 @@ export interface MapPin {
   title: string;
   /** Descrição detalhada do local (texto livre) */
   description: string;
+  /** Cor customizada do pin (hex ou CSS válido) (v1.1) */
+  color?: string;
+  /** Escala visual do pin (ex: 1.0 = padrão, 1.5 = 50% maior) (v1.1) */
+  scale?: number;
 }
 
 /**
