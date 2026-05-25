@@ -1,14 +1,18 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { MapData, MapPin } from '../../main/types';
 import { useDatabase } from '../context/DatabaseContext';
 import { generateId } from '../utils/dnd5e';
 
 // =============================================================================
-// MapsView — Módulo de Mapas Interativos (MVP 2.3)
+// MapsView — Módulo de Mapas Interativos (Issue #5: Painel de Edição Lateral)
 //
 // Upload de imagem local → exibição → pins com descrição de texto.
-// Regra direcao.md: Pins usam posicionamento percentual (0-100) para manter
-// responsividade independente do tamanho da janela.
+//
+// Regras:
+// - Pins usam posicionamento percentual (0-100) para responsividade (direcao.md).
+// - Ao clicar num pin, o painel lateral direito se abre com inputs de edição.
+// - O painel salva automaticamente no DatabaseContext a cada alteração.
+// - Fechar o painel expande o mapa de volta para ocupar toda a área.
 // =============================================================================
 
 // ---- Sub-componente: Pin Visual no Mapa ----
@@ -71,20 +75,34 @@ function MapPinMarker({ pin, isSelected, onClick }: MapPinMarkerProps) {
   );
 }
 
-// ---- Sub-componente: Painel de Edição de Pin ----
+// ---- Sub-componente: Painel Lateral de Edição do Pin ----
+//
+// É um painel fixo à direita que substitui o antigo editor flutuante.
+// Salva automaticamente no DatabaseContext a cada keystroke (auto-save).
+// O pai gerencia o estado de "isSaving" via callback onSave.
 
-interface PinEditorProps {
+interface PinEditorPanelProps {
   pin: MapPin;
-  onSave: (pin: MapPin) => void;
+  /** Chamado com o pin atualizado toda vez que o usuário altera um campo. */
+  onFieldChange: (updatedPin: MapPin) => void;
   onDelete: () => void;
   onClose: () => void;
+  isSaving: boolean;
 }
 
-function PinEditor({ pin: initialPin, onSave, onDelete, onClose }: PinEditorProps) {
-  const [pin, setPin] = useState<MapPin>(initialPin);
+function PinEditorPanel({ pin, onFieldChange, onDelete, onClose, isSaving }: PinEditorPanelProps) {
+  // Estado local espelha o pin selecionado; sincroniza quando o pin muda.
+  const [localPin, setLocalPin] = useState<MapPin>(pin);
 
-  const update = <K extends keyof MapPin>(key: K, value: MapPin[K]) => {
-    setPin((prev) => ({ ...prev, [key]: value }));
+  // Re-sincroniza quando o pin selecionado muda (ex: clique em outro pin).
+  useEffect(() => {
+    setLocalPin(pin);
+  }, [pin.id]);
+
+  const handleChange = <K extends keyof MapPin>(key: K, value: MapPin[K]) => {
+    const updated = { ...localPin, [key]: value };
+    setLocalPin(updated);
+    onFieldChange(updated);
   };
 
   return (
@@ -92,65 +110,101 @@ function PinEditor({ pin: initialPin, onSave, onDelete, onClose }: PinEditorProp
       id="pin-editor-panel"
       onClick={(e) => e.stopPropagation()}
       className="
-        absolute right-4 top-4 z-30
-        w-72 card p-4 shadow-xl
-        animate-slide-in
-        flex flex-col gap-3
+        flex flex-col h-full
+        w-72 shrink-0
+        bg-codex-surface border-l border-codex-border
+        animate-fade-in
       "
     >
-      <div className="flex items-center justify-between">
-        <h3 className="font-heading text-gold-primary text-sm">Editar Pin</h3>
-        <button
-          id="pin-editor-close"
-          onClick={onClose}
-          className="btn-icon w-6 h-6 p-0 flex items-center justify-center text-xs"
-        >
-          ✕
-        </button>
+      {/* Cabeçalho do painel */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-codex-border shrink-0">
+        <div className="flex items-center gap-2">
+          <span className="text-gold-primary text-sm">📍</span>
+          <h3 className="font-heading text-gold-primary text-sm">Editar Pin</h3>
+        </div>
+        <div className="flex items-center gap-2">
+          {/* Indicador de salvamento */}
+          {isSaving && (
+            <span className="text-[10px] text-text-muted animate-pulse-gold">
+              Salvando…
+            </span>
+          )}
+          <button
+            id="pin-editor-close"
+            onClick={onClose}
+            title="Fechar painel e expandir mapa"
+            className="btn-icon w-7 h-7 p-0 flex items-center justify-center text-sm"
+          >
+            ✕
+          </button>
+        </div>
       </div>
 
-      <div>
-        <label htmlFor="pin-title" className="text-xs text-text-muted block mb-1">Título</label>
-        <input
-          id="pin-title"
-          type="text"
-          value={pin.title}
-          onChange={(e) => update('title', e.target.value)}
-          placeholder="Ex: Taverna do Corvo"
-          className="input-medieval text-sm"
-          autoFocus
-        />
+      {/* Campos de edição */}
+      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+
+        {/* Campo: Título */}
+        <div>
+          <label htmlFor="pin-title" className="text-xs text-text-muted block mb-1.5 uppercase tracking-wide">
+            Título do Local
+          </label>
+          <input
+            id="pin-title"
+            type="text"
+            value={localPin.title}
+            onChange={(e) => handleChange('title', e.target.value)}
+            placeholder="Ex: Taverna do Corvo"
+            className="input-medieval text-sm"
+            autoFocus
+          />
+        </div>
+
+        {/* Campo: Descrição */}
+        <div className="flex-1 flex flex-col">
+          <label htmlFor="pin-description" className="text-xs text-text-muted block mb-1.5 uppercase tracking-wide">
+            História / Descrição
+          </label>
+          <textarea
+            id="pin-description"
+            value={localPin.description}
+            onChange={(e) => handleChange('description', e.target.value)}
+            placeholder="Descreva este local, seus segredos, habitantes e mistérios…"
+            rows={10}
+            className="input-medieval text-sm resize-y selectable flex-1"
+          />
+        </div>
+
+        {/* Metadados do pin (somente leitura) */}
+        <div className="p-3 rounded-md bg-codex-bg border border-codex-border space-y-1">
+          <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">Posição no Mapa</p>
+          <div className="flex gap-3">
+            <span className="text-xs text-text-secondary font-mono">
+              X: <span className="text-text-primary">{localPin.coordinateX.toFixed(1)}%</span>
+            </span>
+            <span className="text-xs text-text-secondary font-mono">
+              Y: <span className="text-text-primary">{localPin.coordinateY.toFixed(1)}%</span>
+            </span>
+          </div>
+        </div>
       </div>
 
-      <div>
-        <label htmlFor="pin-description" className="text-xs text-text-muted block mb-1">
-          Descrição
-        </label>
-        <textarea
-          id="pin-description"
-          value={pin.description}
-          onChange={(e) => update('description', e.target.value)}
-          placeholder="Descreva este local..."
-          rows={5}
-          className="input-medieval text-sm resize-y selectable"
-        />
-      </div>
-
-      <div className="flex gap-2">
-        <button
-          id="pin-editor-save"
-          onClick={() => onSave(pin)}
-          className="btn-primary flex-1 text-xs py-1.5"
-        >
-          Salvar Pin
-        </button>
+      {/* Rodapé: Ações */}
+      <div className="px-4 py-3 border-t border-codex-border shrink-0 flex gap-2">
         <button
           id="pin-editor-delete"
           onClick={onDelete}
-          className="btn-danger text-xs py-1.5 px-3"
-          title="Excluir pin"
+          className="btn-danger text-xs py-1.5 px-3 flex items-center gap-1.5"
+          title="Excluir este pin permanentemente"
         >
-          🗑
+          🗑 Excluir Pin
+        </button>
+        <div className="flex-1" />
+        <button
+          id="pin-editor-close-bottom"
+          onClick={onClose}
+          className="btn-secondary text-xs py-1.5 px-3"
+        >
+          Fechar
         </button>
       </div>
     </div>
@@ -164,8 +218,11 @@ export default function MapsView() {
   const [selectedMapId, setSelectedMapId] = useState<string | null>(null);
   const [selectedPinId, setSelectedPinId] = useState<string | null>(null);
   const [isLoadingImage, setIsLoadingImage] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const mapContainerRef = useRef<HTMLDivElement>(null);
+  // Debounce ref para agrupar saves rápidos enquanto o usuário digita
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const selectedMap = maps.find((m) => m.id === selectedMapId) ?? null;
   const selectedPin = selectedMap?.pins.find((p) => p.id === selectedPinId) ?? null;
@@ -182,7 +239,7 @@ export default function MapsView() {
 
       const now = new Date().toISOString();
       // Extrai o nome do arquivo como nome padrão do mapa
-      const fileName = filePath.split(/[\\/]/).pop()?.replace(/\.[^.]+$/, '') ?? 'Mapa';
+      const fileName = filePath.split(/[\\\/]/).pop()?.replace(/\.[^.]+$/, '') ?? 'Mapa';
 
       const newMap: MapData = {
         id: generateId(),
@@ -201,7 +258,7 @@ export default function MapsView() {
     }
   };
 
-  // Adiciona um pin ao clicar no mapa com botão direito
+  // Adiciona um pin ao clicar com botão direito no mapa
   const handleMapRightClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!selectedMap || !mapContainerRef.current) return;
     e.preventDefault();
@@ -230,18 +287,33 @@ export default function MapsView() {
     setSelectedPinId(newPin.id);
   }, [selectedMap, saveMap]);
 
-  // Salva pin editado
-  const handleSavePin = async (updatedPin: MapPin) => {
+  // Auto-save com debounce: chamado pelo PinEditorPanel a cada alteração de campo.
+  // Agrupa edições rápidas para evitar uma chamada de IPC por keystroke.
+  const handlePinFieldChange = useCallback((updatedPin: MapPin) => {
     if (!selectedMap) return;
-    const updatedMap: MapData = {
-      ...selectedMap,
-      // Imutabilidade: map() cria novo array ao atualizar o pin
-      pins: selectedMap.pins.map((p) => p.id === updatedPin.id ? updatedPin : p),
-      updatedAt: new Date().toISOString(),
+
+    // Cancela o timer anterior para agrupar edições rápidas
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    setIsSaving(true);
+
+    saveTimerRef.current = setTimeout(async () => {
+      const updatedMap: MapData = {
+        ...selectedMap,
+        // Imutabilidade: map() cria novo array ao atualizar o pin
+        pins: selectedMap.pins.map((p) => p.id === updatedPin.id ? updatedPin : p),
+        updatedAt: new Date().toISOString(),
+      };
+      await saveMap(updatedMap);
+      setIsSaving(false);
+    }, 600); // 600ms de debounce
+  }, [selectedMap, saveMap]);
+
+  // Limpa o timer de debounce ao desmontar ou trocar de pin
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
-    await saveMap(updatedMap);
-    setSelectedPinId(null);
-  };
+  }, [selectedPinId]);
 
   // Remove pin
   const handleDeletePin = async () => {
@@ -259,13 +331,29 @@ export default function MapsView() {
   const handleDeleteMap = async (id: string) => {
     if (!window.confirm('Excluir este mapa e todos os seus pins?')) return;
     await deleteMap(id);
-    if (selectedMapId === id) setSelectedMapId(null);
+    if (selectedMapId === id) {
+      setSelectedMapId(null);
+      setSelectedPinId(null);
+    }
   };
+
+  // Fecha o painel e garante que o save pendente seja cancelado sem perda de dados
+  const handleClosePanel = () => {
+    // O timer de debounce pode ter um save pendente — forçamos a execução imediata
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    setIsSaving(false);
+    setSelectedPinId(null);
+  };
+
+  const isPanelOpen = selectedPinId !== null && selectedPin !== null;
 
   return (
     <div className="flex h-full overflow-hidden">
 
-      {/* ---- Sidebar de Mapas ---- */}
+      {/* ---- Sidebar de Mapas (esquerda) ---- */}
       <div className="flex flex-col w-56 shrink-0 bg-codex-bg border-r border-codex-border">
         <div className="p-3 border-b border-codex-border">
           <h1 className="font-heading text-xl text-gradient-gold mb-3">Mapas</h1>
@@ -323,8 +411,8 @@ export default function MapsView() {
         </div>
       </div>
 
-      {/* ---- Área do Mapa ---- */}
-      <div className="flex-1 overflow-hidden bg-codex-bg flex flex-col">
+      {/* ---- Área Central: Mapa + Painel Lateral ---- */}
+      <div className="flex-1 overflow-hidden flex flex-col">
         {selectedMap ? (
           <>
             {/* Barra de Info do Mapa */}
@@ -332,56 +420,71 @@ export default function MapsView() {
               <div>
                 <h2 className="font-heading text-sm text-text-primary">{selectedMap.name}</h2>
                 <p className="text-[10px] text-text-muted">
-                  {selectedMap.pins.length} pin{selectedMap.pins.length !== 1 ? 's' : ''} · Clique direito no mapa para adicionar um pin
+                  {selectedMap.pins.length} pin{selectedMap.pins.length !== 1 ? 's' : ''}
+                  {' · '}
+                  <span className="opacity-70">Botão direito no mapa para adicionar um pin</span>
                 </p>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-text-muted">
-                  {selectedPinId ? '📍 Editando pin...' : ''}
-                </span>
-              </div>
-            </div>
-
-            {/* Container do Mapa com Pins */}
-            <div className="flex-1 overflow-auto p-4 flex items-start justify-center relative">
-              <div
-                ref={mapContainerRef}
-                onContextMenu={handleMapRightClick}
-                onClick={() => setSelectedPinId(null)}
-                className="relative inline-block select-none cursor-crosshair"
-              >
-                {/* Imagem do Mapa */}
-                <img
-                  src={selectedMap.imageBase64}
-                  alt={`Mapa: ${selectedMap.name}`}
-                  className="max-w-full max-h-[calc(100vh-200px)] rounded-lg border border-codex-border shadow-lg"
-                  draggable={false}
-                  style={{ pointerEvents: 'none' }}
-                />
-
-                {/* Pins sobrepostos */}
-                {selectedMap.pins.map((pin) => (
-                  <MapPinMarker
-                    key={pin.id}
-                    pin={pin}
-                    isSelected={selectedPinId === pin.id}
-                    onClick={() => setSelectedPinId(pin.id)}
-                  />
-                ))}
-
-                {/* Editor de Pin flutuante */}
-                {selectedPinId && selectedPin && (
-                  <PinEditor
-                    pin={selectedPin}
-                    onSave={handleSavePin}
-                    onDelete={handleDeletePin}
-                    onClose={() => setSelectedPinId(null)}
-                  />
+              <div className="flex items-center gap-3">
+                {isPanelOpen && (
+                  <span className="text-xs text-gold-primary animate-pulse-gold">
+                    📍 {selectedPin?.title || 'Pin selecionado'}
+                  </span>
                 )}
               </div>
             </div>
+
+            {/* Layout: Mapa + Painel de Edição lado a lado */}
+            <div className="flex-1 overflow-hidden flex">
+
+              {/* Área do Mapa */}
+              <div
+                className="flex-1 overflow-auto p-4 flex items-start justify-center relative"
+                // Clique fora dos pins fecha o painel (mas não ao clicar no painel em si)
+                onClick={() => handleClosePanel()}
+              >
+                <div
+                  ref={mapContainerRef}
+                  onContextMenu={handleMapRightClick}
+                  onClick={(e) => e.stopPropagation()}
+                  className="relative inline-block select-none cursor-crosshair"
+                >
+                  {/* Imagem do Mapa */}
+                  <img
+                    src={selectedMap.imageBase64}
+                    alt={`Mapa: ${selectedMap.name}`}
+                    className="max-w-full max-h-[calc(100vh-160px)] rounded-lg border border-codex-border shadow-lg"
+                    draggable={false}
+                    style={{ pointerEvents: 'none' }}
+                  />
+
+                  {/* Pins sobrepostos */}
+                  {selectedMap.pins.map((pin) => (
+                    <MapPinMarker
+                      key={pin.id}
+                      pin={pin}
+                      isSelected={selectedPinId === pin.id}
+                      onClick={() => setSelectedPinId(pin.id)}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Painel Lateral de Edição (slide-in/out via condicional de largura) */}
+              {isPanelOpen && selectedPin && (
+                <PinEditorPanel
+                  key={selectedPinId}
+                  pin={selectedPin}
+                  onFieldChange={handlePinFieldChange}
+                  onDelete={handleDeletePin}
+                  onClose={handleClosePanel}
+                  isSaving={isSaving}
+                />
+              )}
+            </div>
           </>
         ) : (
+          // Estado vazio: nenhum mapa selecionado
           <div className="flex flex-col items-center justify-center h-full text-center px-8">
             <div className="text-6xl mb-4 opacity-20">🗺️</div>
             <h2 className="font-heading text-xl text-text-muted mb-2">
