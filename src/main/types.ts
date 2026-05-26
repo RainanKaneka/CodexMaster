@@ -311,6 +311,19 @@ export interface Combatant {
    * A duração é decrementada automaticamente a cada início de turno do portador.
    */
   effects?: ActiveEffect[];
+  /**
+   * Modificador temporário de Classe de Armadura (Issue #13).
+   * Somado à CA base. Pode ser positivo (bônus) ou negativo (penalidade).
+   * Não persiste na ficha original.
+   */
+  tempAC?: number;
+  /**
+   * Marcadores voláteis de combate (Issue #13 — Atributos Voláteis).
+   * Campos numéricos livres criados pelo Mestre durante o combate.
+   * Ex: "Pontos de Talaipora", "Pilhas de Raiva", "Carga Mágica".
+   * Não são salvos na ficha original — existem apenas no encontro ativo.
+   */
+  volatileMarkers?: { id: string; name: string; value: number; color: string }[];
 }
 
 /**

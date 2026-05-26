@@ -3,6 +3,7 @@ import { CharacterSheet, Combatant, ActiveEncounter, ActiveEffect } from '../../
 import { useDatabase } from '../context/DatabaseContext';
 import { calculateModifier } from '../utils/dnd5e';
 
+
 // =============================================================================
 // CombatTrackerView — Rastreador de Combate (Fase 3)
 //
@@ -161,11 +162,107 @@ function EffectBadges({ effects, combatantId, onRemove }: EffectBadgesProps) {
 }
 
 // =============================================================================
-// Sub-componente: Painel do Participante no Modo de Combate
+// Sub-componente: Barra de Métrica Customizada
 // =============================================================================
+
+interface CustomMetricBarProps {
+  metricId: string;
+  name: string;
+  current: number;
+  max: number;
+  color: string; // hex, ex: "#4a7fa5"
+  combatantId: string;
+  onChange: (combatantId: string, metricId: string, delta: number) => void;
+  onSetDirect: (combatantId: string, metricId: string, value: number) => void;
+}
+
+function CustomMetricBar({ metricId, name, current, max, color, combatantId, onChange, onSetDirect }: CustomMetricBarProps) {
+  const [directInput, setDirectInput] = useState<string | null>(null);
+  const pct = max > 0 ? Math.max(0, Math.min(100, (current / max) * 100)) : 0;
+
+  const handleDirectBlur = () => {
+    if (directInput !== null) {
+      const val = parseInt(directInput, 10);
+      if (!isNaN(val)) onSetDirect(combatantId, metricId, val);
+      setDirectInput(null);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      {/* Nome */}
+      <span
+        className="text-[9px] font-medium uppercase tracking-wider shrink-0 w-16 truncate"
+        style={{ color }}
+        title={name}
+      >
+        {name}
+      </span>
+
+      {/* Barra */}
+      <div className="flex-1 h-1.5 bg-codex-bg rounded-full overflow-hidden">
+        <div
+          className="h-full rounded-full transition-all duration-300"
+          style={{ width: `${pct}%`, backgroundColor: color }}
+        />
+      </div>
+
+      {/* Botão − */}
+      <button
+        id={`metric-minus-${combatantId}-${metricId}`}
+        onClick={() => onChange(combatantId, metricId, -1)}
+        disabled={current <= 0}
+        title={`Gastar 1 ${name}`}
+        className="w-5 h-5 flex items-center justify-center rounded border border-codex-border text-text-muted hover:text-crimson-bright hover:border-crimson-muted/50 transition-all duration-100 text-[11px] font-bold leading-none disabled:opacity-25 disabled:cursor-not-allowed"
+      >
+        −
+      </button>
+
+      {/* Valor atual (clicável para edição direta) */}
+      {directInput !== null ? (
+        <input
+          id={`metric-direct-${combatantId}-${metricId}`}
+          type="number"
+          value={directInput}
+          onChange={(e) => setDirectInput(e.target.value)}
+          onBlur={handleDirectBlur}
+          onKeyDown={(e) => e.key === 'Enter' && handleDirectBlur()}
+          className="w-10 text-center text-[10px] font-mono font-bold bg-codex-bg border rounded px-0.5 py-0"
+          style={{ borderColor: color, color }}
+          autoFocus
+        />
+      ) : (
+        <button
+          id={`metric-value-${combatantId}-${metricId}`}
+          onClick={() => setDirectInput(String(current))}
+          title="Clique para editar diretamente"
+          className="text-[10px] font-mono font-bold hover:underline cursor-pointer w-10 text-center"
+          style={{ color }}
+        >
+          {current}/{max}
+        </button>
+      )}
+
+      {/* Botão + */}
+      <button
+        id={`metric-plus-${combatantId}-${metricId}`}
+        onClick={() => onChange(combatantId, metricId, +1)}
+        disabled={current >= max}
+        title={`Recuperar 1 ${name}`}
+        className="w-5 h-5 flex items-center justify-center rounded border border-codex-border text-text-muted hover:text-emerald-400 hover:border-emerald-800/50 transition-all duration-100 text-[11px] font-bold leading-none disabled:opacity-25 disabled:cursor-not-allowed"
+      >
+        +
+      </button>
+    </div>
+  );
+}
+
+
 
 interface CombatantRowProps {
   combatant: Combatant;
+  /** Ficha original no DB (para ler customMetrics) */
+  sheet: CharacterSheet | null;
   isActive: boolean;
   onHpChange: (id: string, delta: number) => void;
   onSetHp: (id: string, value: number) => void;
@@ -174,9 +271,21 @@ interface CombatantRowProps {
   onDeathSaveChange: (id: string, type: 'successes' | 'failures', value: number) => void;
   onAddEffect: (id: string, effect: Omit<ActiveEffect, 'id'>) => void;
   onRemoveEffect: (combatantId: string, effectId: string) => void;
+  /** Altera uma métrica customizada (delta). Persiste na ficha original. */
+  onMetricChange: (combatantId: string, metricId: string, delta: number) => void;
+  /** Define o valor direto de uma métrica customizada. Persiste na ficha original. */
+  onMetricSetDirect: (combatantId: string, metricId: string, value: number) => void;
+  /** Define o modificador temporário de CA (Issue #13). */
+  onSetTempAC: (combatantId: string, modifier: number) => void;
+  /** Adiciona um marcador volátil (Issue #13). */
+  onAddMarker: (combatantId: string, name: string, initialValue: number, color: string) => void;
+  /** Altera o valor de um marcador volátil (delta). */
+  onUpdateMarker: (combatantId: string, markerId: string, delta: number) => void;
+  /** Remove um marcador volátil. */
+  onRemoveMarker: (combatantId: string, markerId: string) => void;
 }
 
-function CombatantRow({ combatant, isActive, onHpChange, onSetHp, onSetTempHp, onRemove, onDeathSaveChange, onAddEffect, onRemoveEffect }: CombatantRowProps) {
+function CombatantRow({ combatant, sheet, isActive, onHpChange, onSetHp, onSetTempHp, onRemove, onDeathSaveChange, onAddEffect, onRemoveEffect, onMetricChange, onMetricSetDirect, onSetTempAC, onAddMarker, onUpdateMarker, onRemoveMarker }: CombatantRowProps) {
   const [deltaInput, setDeltaInput] = useState('');
   const [hpInput, setHpInput] = useState<string | null>(null);
   const [tempHpInput, setTempHpInput] = useState('');
@@ -186,6 +295,20 @@ function CombatantRow({ combatant, isActive, onHpChange, onSetHp, onSetTempHp, o
   const [effectDuration, setEffectDuration] = useState('1');
   const [effectIsBuff, setEffectIsBuff] = useState(true);
   const [effectTickOn, setEffectTickOn] = useState<'start' | 'end'>('end');
+  // Estado da edição de CA Temporária
+  const [editingTempAC, setEditingTempAC] = useState(false);
+  const [tempACInput, setTempACInput] = useState('');
+  // Estado do formulário de Marcadores Voláteis
+  const [showMarkerForm, setShowMarkerForm] = useState(false);
+  const [markerName, setMarkerName] = useState('');
+  const [markerValue, setMarkerValue] = useState('0');
+  const [markerColor, setMarkerColor] = useState('#d4af37');
+  /**
+   * Rascunho local do valor dos marcadores voláteis.
+   * Armazena a string crua enquanto o usuário digita (pode ser '' ou parcial).
+   * O commit real só ocorre no onBlur, mantendo o DB sempre com um number.
+   */
+  const [markerDraftValues, setMarkerDraftValues] = useState<Record<string, string>>({});
 
   const hasTempHp = (combatant.tempHp ?? 0) > 0;
 
@@ -256,6 +379,28 @@ function CombatantRow({ combatant, isActive, onHpChange, onSetHp, onSetTempHp, o
     setShowEffectForm(false);
   };
 
+  const handleTempACCommit = () => {
+    const mod = parseInt(tempACInput, 10);
+    onSetTempAC(combatant.id, isNaN(mod) ? 0 : mod);
+    setEditingTempAC(false);
+    setTempACInput('');
+  };
+
+  const handleAddMarkerSubmit = () => {
+    const trimmed = markerName.trim();
+    const val = parseInt(markerValue, 10);
+    if (!trimmed) return;
+    onAddMarker(combatant.id, trimmed, isNaN(val) ? 0 : val, markerColor);
+    setMarkerName('');
+    setMarkerValue('0');
+    setMarkerColor('#d4af37');
+    setShowMarkerForm(false);
+  };
+
+  const tempAC = combatant.tempAC ?? 0;
+  const effectiveAC = combatant.armorClass + tempAC;
+  const acColor = tempAC > 0 ? 'text-emerald-400' : tempAC < 0 ? 'text-crimson-bright' : 'text-text-muted';
+  const volatileMarkers = combatant.volatileMarkers ?? [];
   const activeEffects = combatant.effects ?? [];
 
   return (
@@ -344,7 +489,40 @@ function CombatantRow({ combatant, isActive, onHpChange, onSetHp, onSetTempHp, o
             <span className={`text-[10px] ${combatant.type === 'player' ? 'text-sky-400' : 'text-amber-400'}`}>
               {combatant.type === 'player' ? '🧙 Jogador' : '👹 Criatura'}
             </span>
-            <span className="text-[10px] text-text-muted">CA {combatant.armorClass}</span>
+            {/* CA Interativa — clica para definir modificador temporário */}
+            {editingTempAC ? (
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] text-text-muted">CA</span>
+                <input
+                  id={`combatant-tempac-input-${combatant.id}`}
+                  type="number"
+                  value={tempACInput}
+                  onChange={(e) => setTempACInput(e.target.value)}
+                  onBlur={handleTempACCommit}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleTempACCommit();
+                    if (e.key === 'Escape') { setEditingTempAC(false); setTempACInput(''); }
+                  }}
+                  placeholder={`mod (era ${tempAC >= 0 ? '+' : ''}${tempAC})`}
+                  className="w-16 text-[10px] font-mono bg-codex-bg border border-gold-dim/60 rounded px-1 py-0 text-center text-gold-primary"
+                  autoFocus
+                />
+              </div>
+            ) : (
+              <button
+                id={`combatant-ac-btn-${combatant.id}`}
+                onClick={() => { setEditingTempAC(true); setTempACInput(String(tempAC)); }}
+                title={tempAC !== 0 ? `CA base ${combatant.armorClass} ${tempAC >= 0 ? '+' : ''}${tempAC} — clique para modificar` : 'Clique para adicionar modif. de CA'}
+                className={`text-[10px] font-mono hover:underline cursor-pointer transition-colors ${acColor}`}
+              >
+                CA {effectiveAC}
+                {tempAC !== 0 && (
+                  <span className="ml-0.5 text-[8px] opacity-70">
+                    ({tempAC >= 0 ? '+' : ''}{tempAC})
+                  </span>
+                )}
+              </button>
+            )}
           </div>
         </div>
 
@@ -389,6 +567,186 @@ function CombatantRow({ combatant, isActive, onHpChange, onSetHp, onSetTempHp, o
 
       {/* Barra de PV */}
       <HpBar current={combatant.hpCurrent} max={combatant.hpMax} />
+
+      {/* Issue #13: Métricas Customizadas da ficha original */}
+      {(() => {
+        const metrics = sheet?.customMetrics;
+        if (!metrics || metrics.length === 0) return null;
+        return (
+          <div className="flex flex-col gap-1.5 mt-1 pt-2 border-t border-codex-border/30">
+            <span className="text-[8px] text-text-muted uppercase tracking-widest">Recursos</span>
+            {metrics.map((m) => (
+              <CustomMetricBar
+                key={m.id}
+                metricId={m.id}
+                name={m.name}
+                current={m.current}
+                max={m.max}
+                color={m.color}
+                combatantId={combatant.id}
+                onChange={onMetricChange}
+                onSetDirect={onMetricSetDirect}
+              />
+            ))}
+          </div>
+        );
+      })()}
+
+      {/* Issue #13: Marcadores Voláteis */}
+      {(volatileMarkers.length > 0 || showMarkerForm) && (
+        <div className="flex flex-col gap-1.5 mt-1 pt-2 border-t border-codex-border/30">
+          <span className="text-[8px] text-text-muted uppercase tracking-widest">Marcadores</span>
+          {/* Badges em linha — expandem conforme o nome, sem cortar */}
+          <div className="flex flex-wrap gap-1.5">
+            {volatileMarkers.map((mk) => {
+              // Cor do marcador com alpha para o fundo e opaco para borda/texto
+              const borderColor = mk.color;
+              const bgColor = `${mk.color}22`; // ~13% opacidade
+              return (
+                <span
+                  key={mk.id}
+                  className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full border text-[10px] font-medium"
+                  style={{
+                    borderColor,
+                    backgroundColor: bgColor,
+                    color: borderColor,
+                    whiteSpace: 'nowrap',
+                  }}
+                  title={`${mk.name}: ${mk.value}`}
+                >
+                  {/* Nome completo sem truncamento */}
+                  <span className="font-semibold">{mk.name}</span>
+                  {/* Separador */}
+                  <span className="opacity-50 mx-0.5">│</span>
+                  {/* Botão − */}
+                  <button
+                    id={`marker-minus-${combatant.id}-${mk.id}`}
+                    onClick={() => onUpdateMarker(combatant.id, mk.id, -1)}
+                    title={`Diminuir ${mk.name}`}
+                    className="w-4 h-4 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors font-bold leading-none text-[11px]"
+                  >
+                    −
+                  </button>
+                  {/* Valor — input camuflado com draft state para permitir edição livre */}
+                  <input
+                    id={`marker-value-inline-${combatant.id}-${mk.id}`}
+                    type="number"
+                    // Mostra o rascunho local se estiver editando; caso contrário o valor persistido
+                    value={markerDraftValues[mk.id] ?? String(mk.value)}
+                    onChange={(e) => {
+                      // Salva a string bruta (pode ser '' enquanto apaga)
+                      setMarkerDraftValues((prev) => ({ ...prev, [mk.id]: e.target.value }));
+                    }}
+                    onBlur={() => {
+                      const draft = markerDraftValues[mk.id];
+                      // Limpa o rascunho independente do resultado
+                      setMarkerDraftValues((prev) => {
+                        const next = { ...prev };
+                        delete next[mk.id];
+                        return next;
+                      });
+                      if (draft === undefined || draft === '') return; // nenhuma edição ou vazio → mantém valor atual
+                      const next = parseInt(draft, 10);
+                      if (!isNaN(next) && next !== mk.value) {
+                        onUpdateMarker(combatant.id, mk.id, next - mk.value);
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      // Enter confirma imediatamente sem precisar clicar fora
+                      if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                    }}
+                    title={`Valor de ${mk.name} — edite diretamente ou use ±`}
+                    className="font-mono font-bold text-[11px] w-10 text-center bg-transparent border-none outline-none focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    style={{ color: 'inherit' }}
+                  />
+                  {/* Botão + */}
+                  <button
+                    id={`marker-plus-${combatant.id}-${mk.id}`}
+                    onClick={() => onUpdateMarker(combatant.id, mk.id, +1)}
+                    title={`Aumentar ${mk.name}`}
+                    className="w-4 h-4 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors font-bold leading-none text-[11px]"
+                  >
+                    +
+                  </button>
+                  {/* Separador */}
+                  <span className="opacity-30">│</span>
+                  {/* Remover */}
+                  <button
+                    id={`marker-remove-${combatant.id}-${mk.id}`}
+                    onClick={() => onRemoveMarker(combatant.id, mk.id)}
+                    title="Remover marcador"
+                    className="w-4 h-4 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors text-[10px] leading-none opacity-60 hover:opacity-100"
+                  >
+                    ×
+                  </button>
+                </span>
+              );
+            })}
+          </div>
+
+          {/* Formulário de novo marcador */}
+          {showMarkerForm && (
+            <div className="flex flex-col gap-1.5 p-2 rounded-lg bg-amber-950/20 border border-amber-800/30 mt-0.5">
+              <p className="text-[9px] text-amber-300/70 uppercase tracking-widest">Novo Marcador</p>
+              <div className="flex items-center gap-1.5">
+                <input
+                  id={`marker-name-${combatant.id}`}
+                  type="text"
+                  value={markerName}
+                  onChange={(e) => setMarkerName(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleAddMarkerSubmit()}
+                  placeholder="Nome (ex: Pontos de Talaipora)"
+                  className="input-medieval flex-1 text-xs py-0.5"
+                  autoFocus
+                />
+                <input
+                  id={`marker-value-${combatant.id}`}
+                  type="number"
+                  value={markerValue}
+                  onChange={(e) => setMarkerValue(e.target.value)}
+                  className="input-medieval w-12 text-xs py-0.5 text-center"
+                  placeholder="0"
+                  title="Valor inicial"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                {/* Seletor de cor */}
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    id={`marker-color-${combatant.id}`}
+                    type="color"
+                    value={markerColor}
+                    onChange={(e) => setMarkerColor(e.target.value)}
+                    className="w-6 h-6 rounded cursor-pointer border-0 p-0 bg-transparent"
+                    title="Escolher cor do marcador"
+                  />
+                  <span
+                    className="text-[9px] font-mono px-2 py-0.5 rounded-full border"
+                    style={{ color: markerColor, borderColor: markerColor, backgroundColor: `${markerColor}22` }}
+                  >
+                    Prévia
+                  </span>
+                </label>
+                <div className="flex-1" />
+                <button
+                  id={`marker-confirm-${combatant.id}`}
+                  onClick={handleAddMarkerSubmit}
+                  disabled={!markerName.trim()}
+                  className="text-[10px] px-2.5 py-0.5 rounded bg-amber-900/50 border border-amber-600/50 text-amber-200 hover:bg-amber-800/50 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  Criar
+                </button>
+                <button
+                  onClick={() => { setShowMarkerForm(false); setMarkerName(''); setMarkerValue('0'); setMarkerColor('#d4af37'); }}
+                  className="text-[10px] text-text-muted hover:text-crimson-bright transition-colors"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Linha 1.5: Efeitos Ativos */}
       {activeEffects.length > 0 && (
@@ -535,7 +893,7 @@ function CombatantRow({ combatant, isActive, onHpChange, onSetHp, onSetTempHp, o
         </div>
       )}
 
-      {/* Linha 4: Adicionar Efeito */}
+      {/* Linha 4: Adicionar Efeito + Marcador */}
       <div className="flex items-center gap-2 mt-1 pt-2 border-t border-codex-border/40">
         <button
           id={`combatant-add-effect-btn-${combatant.id}`}
@@ -549,7 +907,19 @@ function CombatantRow({ combatant, isActive, onHpChange, onSetHp, onSetTempHp, o
         >
           ✨ Efeito
         </button>
-        {activeEffects.length === 0 && !showEffectForm && (
+        <button
+          id={`combatant-add-marker-btn-${combatant.id}`}
+          onClick={() => { setShowMarkerForm((v) => !v); setShowEffectForm(false); }}
+          className={`text-[10px] flex items-center gap-1 px-2 py-0.5 rounded border transition-all duration-150 ${
+            showMarkerForm
+              ? 'bg-amber-950/60 border-amber-600/60 text-amber-300'
+              : 'border-codex-border text-text-muted hover:border-amber-700/60 hover:text-amber-400'
+          }`}
+          title="Adicionar marcador volátil de combate"
+        >
+          🏷 Marcador
+        </button>
+        {activeEffects.length === 0 && volatileMarkers.length === 0 && !showEffectForm && !showMarkerForm && (
           <span className="text-[9px] text-text-muted italic">Sem efeitos ativos</span>
         )}
       </div>
@@ -716,7 +1086,8 @@ function SheetCard({ sheet, instanceCount, onAdd }: SheetCardProps) {
 type CombatMode = 'staging' | 'active';
 
 export default function CombatTrackerView() {
-  const { sheets, activeEncounter, saveActiveEncounter } = useDatabase();
+  const { sheets, activeEncounter, saveActiveEncounter, saveSheet } = useDatabase();
+
 
   // Determina o modo inicial baseado no estado persistido
   const [mode, setMode] = useState<CombatMode>(activeEncounter ? 'active' : 'staging');
@@ -1107,8 +1478,136 @@ export default function CombatTrackerView() {
   }, [encounter, persistEncounter]);
 
   // =============================================================================
+  // Handlers de Atributos Voláteis (Issue #13)
+  // =============================================================================
+
+  /** Define o modificador temporário de CA de um combatente. */
+  const handleSetTempAC = useCallback(async (combatantId: string, modifier: number) => {
+    if (!encounter) return;
+    const updated: ActiveEncounter = {
+      ...encounter,
+      combatants: encounter.combatants.map((c) =>
+        c.id !== combatantId ? c : { ...c, tempAC: modifier }
+      ),
+    };
+    await persistEncounter(updated);
+  }, [encounter, persistEncounter]);
+
+  /** Adiciona um marcador volátil a um combatente com ID único. */
+  const handleAddMarker = useCallback(async (combatantId: string, name: string, initialValue: number, color: string) => {
+    if (!encounter) return;
+    const newMarker = {
+      id: typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `mk-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      name,
+      value: initialValue,
+      color,
+    };
+    const updated: ActiveEncounter = {
+      ...encounter,
+      combatants: encounter.combatants.map((c) =>
+        c.id !== combatantId ? c : { ...c, volatileMarkers: [...(c.volatileMarkers ?? []), newMarker] }
+      ),
+    };
+    await persistEncounter(updated);
+  }, [encounter, persistEncounter]);
+
+  /** Altera o valor de um marcador volátil por delta. */
+  const handleUpdateMarker = useCallback(async (combatantId: string, markerId: string, delta: number) => {
+    if (!encounter) return;
+    const updated: ActiveEncounter = {
+      ...encounter,
+      combatants: encounter.combatants.map((c) =>
+        c.id !== combatantId ? c : {
+          ...c,
+          volatileMarkers: (c.volatileMarkers ?? []).map((mk) =>
+            mk.id !== markerId ? mk : { ...mk, value: mk.value + delta }
+          ),
+        }
+      ),
+    };
+    await persistEncounter(updated);
+  }, [encounter, persistEncounter]);
+
+  /** Remove um marcador volátil de um combatente. */
+  const handleRemoveMarker = useCallback(async (combatantId: string, markerId: string) => {
+    if (!encounter) return;
+    const updated: ActiveEncounter = {
+      ...encounter,
+      combatants: encounter.combatants.map((c) =>
+        c.id !== combatantId ? c : {
+          ...c,
+          volatileMarkers: (c.volatileMarkers ?? []).filter((mk) => mk.id !== markerId),
+        }
+      ),
+    };
+    await persistEncounter(updated);
+  }, [encounter, persistEncounter]);
+
+  // =============================================================================
+  // Handlers de Métricas Customizadas (Issue #13)
+  // =============================================================================
+
+  /**
+   * Aplica um delta (+1 / -1 / N) a uma métrica customizada da ficha original.
+   * Persiste a ficha via saveSheet para manter o DB sincronizado.
+   *
+   * Não altera o Combatant diretamente: o Combatant referencia a ficha pelo sheetId
+   * e a barra é renderizada lendo a ficha via `sheets.find`. O re-render é automático
+   * pois `sheets` é estado reativo do DatabaseContext.
+   */
+  const handleMetricChange = useCallback(async (combatantId: string, metricId: string, delta: number) => {
+    if (!encounter) return;
+    const combatant = encounter.combatants.find((c) => c.id === combatantId);
+    if (!combatant) return;
+
+    const sheet = sheets.find((s) => s.id === combatant.sheetId);
+    if (!sheet || !sheet.customMetrics) return;
+
+    const updatedSheet: typeof sheet = {
+      ...sheet,
+      customMetrics: sheet.customMetrics.map((m) =>
+        m.id !== metricId ? m : {
+          ...m,
+          current: Math.max(0, Math.min(m.max, m.current + delta)),
+        }
+      ),
+      updatedAt: new Date().toISOString(),
+    };
+
+    await saveSheet(updatedSheet);
+  }, [encounter, sheets, saveSheet]);
+
+  /**
+   * Define o valor direto de uma métrica (edição pelo clique no valor atual).
+   */
+  const handleMetricSetDirect = useCallback(async (combatantId: string, metricId: string, value: number) => {
+    if (!encounter) return;
+    const combatant = encounter.combatants.find((c) => c.id === combatantId);
+    if (!combatant) return;
+
+    const sheet = sheets.find((s) => s.id === combatant.sheetId);
+    if (!sheet || !sheet.customMetrics) return;
+
+    const updatedSheet: typeof sheet = {
+      ...sheet,
+      customMetrics: sheet.customMetrics.map((m) =>
+        m.id !== metricId ? m : {
+          ...m,
+          current: Math.max(0, Math.min(m.max, value)),
+        }
+      ),
+      updatedAt: new Date().toISOString(),
+    };
+
+    await saveSheet(updatedSheet);
+  }, [encounter, sheets, saveSheet]);
+
+  // =============================================================================
   // Handlers de Mid-Combat Insertion / Removal
   // =============================================================================
+
 
   /**
    * Remove um combatente do encontro em andamento com correção de turnIndex.
@@ -1638,20 +2137,30 @@ export default function CombatTrackerView() {
       {/* ===== Lista de Combatentes ===== */}
       <div className="flex-1 overflow-y-auto p-4">
         <div className="max-w-3xl mx-auto flex flex-col gap-3">
-          {encounter.combatants.map((combatant) => (
-            <CombatantRow
-              key={combatant.id}
-              combatant={combatant}
-              isActive={combatant.isActiveTurn}
-              onHpChange={handleHpChange}
-              onSetHp={handleSetHp}
-              onSetTempHp={handleSetTempHp}
-              onRemove={handleRemoveCombatant}
-              onDeathSaveChange={handleDeathSaveChange}
-              onAddEffect={handleAddEffect}
-              onRemoveEffect={handleRemoveEffect}
-            />
-          ))}
+          {encounter.combatants.map((combatant) => {
+            const sheet = sheets.find((s) => s.id === combatant.sheetId) ?? null;
+            return (
+              <CombatantRow
+                key={combatant.id}
+                combatant={combatant}
+                sheet={sheet}
+                isActive={combatant.isActiveTurn}
+                onHpChange={handleHpChange}
+                onSetHp={handleSetHp}
+                onSetTempHp={handleSetTempHp}
+                onRemove={handleRemoveCombatant}
+                onDeathSaveChange={handleDeathSaveChange}
+                onAddEffect={handleAddEffect}
+                onRemoveEffect={handleRemoveEffect}
+                onMetricChange={handleMetricChange}
+                onMetricSetDirect={handleMetricSetDirect}
+                onSetTempAC={handleSetTempAC}
+                onAddMarker={handleAddMarker}
+                onUpdateMarker={handleUpdateMarker}
+                onRemoveMarker={handleRemoveMarker}
+              />
+            );
+          })}
         </div>
       </div>
     </div>
