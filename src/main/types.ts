@@ -75,6 +75,21 @@ export interface CharacterSheet {
   createdAt: string;
   /** Timestamp ISO 8601 da última modificação */
   updatedAt: string;
+  /**
+   * Pontos de Vida Temporários (Issue #10).
+   * Absorvem dano antes do PV real. Expiram ao descansar.
+   */
+  tempHp?: number;
+  /**
+   * Modificador aplicado ao PV Máximo (Issue #10).
+   * Pode ser positivo (bônus) ou negativo (penalidade).
+   */
+  maxHpModifier?: number;
+  /**
+   * Testes contra a Morte (Issue #10). Apenas para fichas do tipo 'player'.
+   * Rastreia de 0 a 3 sucessos e 0 a 3 falhas.
+   */
+  deathSaves?: { successes: number; failures: number };
 }
 
 /**
@@ -256,6 +271,17 @@ export interface Combatant {
   dexterityModifier: number;
   /** Indica se é o turno deste combatente no round atual */
   isActiveTurn: boolean;
+  /**
+   * Testes contra a Morte (Issue #10). Apenas para type 'player' com hpCurrent <= 0.
+   * Rastreia de 0 a 3 sucessos e 0 a 3 falhas.
+   * previousHp salva o HP negativo antes da estabilização para desfazer o 3º sucesso.
+   */
+  deathSaves?: { successes: number; failures: number; previousHp?: number };
+  /**
+   * Pontos de Vida Temporários (Issue #10) desta instância de combate.
+   * Absorvem dano antes do PV real. Não se acumulam (último valor sobrescreve).
+   */
+  tempHp?: number;
 }
 
 /**

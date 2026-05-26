@@ -120,15 +120,43 @@ interface CombatantRowProps {
   isActive: boolean;
   onHpChange: (id: string, delta: number) => void;
   onSetHp: (id: string, value: number) => void;
+  onSetTempHp: (id: string, value: number) => void;
+  onDeathSaveChange: (id: string, type: 'successes' | 'failures', value: number) => void;
 }
 
-function CombatantRow({ combatant, isActive, onHpChange, onSetHp }: CombatantRowProps) {
+function CombatantRow({ combatant, isActive, onHpChange, onSetHp, onSetTempHp, onDeathSaveChange }: CombatantRowProps) {
   const [deltaInput, setDeltaInput] = useState('');
   const [hpInput, setHpInput] = useState<string | null>(null); // null = não editando diretamente
+  const [tempHpInput, setTempHpInput] = useState(''); // input para PV temp
+
+  const hasTempHp = (combatant.tempHp ?? 0) > 0;
+
+  const handleSetTempHpCommit = () => {
+    const val = parseInt(tempHpInput, 10);
+    if (!isNaN(val) && val >= 0) {
+      onSetTempHp(combatant.id, val);
+      setTempHpInput('');
+    }
+  };
+
+  const handleTempHpKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') handleSetTempHpCommit();
+  };
 
   const isDefeated = combatant.hpCurrent <= 0;
+  const successes = combatant.deathSaves?.successes ?? 0;
+  const failures  = combatant.deathSaves?.failures  ?? 0;
+  const isStabilized = isDefeated && successes >= 3;
+  const isDead       = isDefeated && failures  >= 3;
+  // "Apenas caído" = derrotado mas sem estado final
+  const isActuallyDefeated = isDefeated && !isStabilized && !isDead;
   const hpPct = combatant.hpMax > 0 ? (combatant.hpCurrent / combatant.hpMax) * 100 : 0;
-  const hpColor = hpPct > 60 ? 'text-emerald-400' : hpPct > 30 ? 'text-amber-400' : 'text-crimson-bright';
+  const hpColor = isStabilized ? 'text-sky-400'
+    : isDead ? 'text-red-400'
+    : combatant.hpCurrent < 0 ? 'text-crimson-bright'
+    : hpPct > 60 ? 'text-emerald-400'
+    : hpPct > 30 ? 'text-amber-400'
+    : 'text-crimson-bright';
 
   const handleDamage = () => {
     const val = parseInt(deltaInput, 10);
@@ -165,7 +193,11 @@ function CombatantRow({ combatant, isActive, onHpChange, onSetHp }: CombatantRow
         relative flex flex-col gap-2 p-3 rounded-lg border transition-all duration-200
         ${isActive
           ? 'bg-codex-surface2 border-gold-primary shadow-gold-sm'
-          : isDefeated
+          : isStabilized
+          ? 'bg-sky-950/20 border-sky-800/40 hover:border-sky-700/60'
+          : isDead
+          ? 'bg-red-950/30 border-red-900/60'
+          : isActuallyDefeated
           ? 'bg-codex-bg border-codex-border opacity-50'
           : 'bg-codex-surface border-codex-border hover:border-codex-surface2'
         }
@@ -195,11 +227,35 @@ function CombatantRow({ combatant, isActive, onHpChange, onSetHp }: CombatantRow
             {isActive && (
               <span className="text-gold-primary text-xs animate-pulse-gold">▶</span>
             )}
-            {isDefeated && (
+            {isStabilized && (
+              <span className="text-sky-400 text-xs" title="Estabilizado">💤</span>
+            )}
+            {isDead && (
+              <span className="text-red-400 text-xs" title="Morto">💀</span>
+            )}
+            {isActuallyDefeated && (
               <span className="text-crimson-bright text-xs">💀</span>
             )}
-            <p className={`font-medium text-sm truncate ${isActive ? 'text-gold-primary' : isDefeated ? 'text-text-muted line-through' : 'text-text-primary'}`}>
-              {combatant.name}
+            <p className={`font-medium text-sm truncate ${
+              isActive ? 'text-gold-primary'
+              : isStabilized ? 'text-sky-300'
+              : isDead ? 'text-red-400'
+              : isActuallyDefeated ? 'text-text-muted'
+              : 'text-text-primary'
+            }`}>
+              <span className={isDead || isActuallyDefeated ? 'line-through' : ''}>
+                {combatant.name}
+              </span>
+              {isStabilized && (
+                <span className="ml-1.5 text-[10px] font-normal text-sky-400/80 not-italic">
+                  — Estabilizado
+                </span>
+              )}
+              {isDead && (
+                <span className="ml-1.5 text-[10px] font-normal text-red-400/80 not-italic">
+                  — Morto
+                </span>
+              )}
             </p>
           </div>
           <div className="flex items-center gap-2 mt-0.5">
@@ -212,6 +268,15 @@ function CombatantRow({ combatant, isActive, onHpChange, onSetHp }: CombatantRow
 
         {/* PV display */}
         <div className="flex flex-col items-end shrink-0">
+          {/* Badge de PV Temporário */}
+          {hasTempHp && (
+            <div
+              className="flex items-center gap-1 mb-1 px-1.5 py-0.5 rounded-full bg-cyan-950/60 border border-cyan-700/50"
+              title={`${combatant.tempHp} PV Temporários ativos`}
+            >
+              <span className="text-[9px] text-cyan-400 font-mono font-bold leading-none">🛡 +{combatant.tempHp}</span>
+            </div>
+          )}
           <div className="flex items-baseline gap-0.5">
             {hpInput !== null ? (
               <input
@@ -258,9 +323,8 @@ function CombatantRow({ combatant, isActive, onHpChange, onSetHp }: CombatantRow
         <button
           id={`combatant-damage-${combatant.id}`}
           onClick={handleDamage}
-          disabled={isDefeated}
           title="Aplicar Dano"
-          className="btn-danger text-xs py-1 px-2.5 disabled:opacity-40"
+          className="btn-danger text-xs py-1 px-2.5"
         >
           − Dano
         </button>
@@ -273,6 +337,112 @@ function CombatantRow({ combatant, isActive, onHpChange, onSetHp }: CombatantRow
           + Cura
         </button>
       </div>
+
+      {/* Linha 3: PV Temporário */}
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] text-cyan-400/80 shrink-0 flex items-center gap-1">
+          🛡 PV Temp
+          {hasTempHp && (
+            <span className="font-mono text-cyan-300 font-bold">{combatant.tempHp}</span>
+          )}
+        </span>
+        <input
+          id={`combatant-temphp-${combatant.id}`}
+          type="number"
+          value={tempHpInput}
+          onChange={(e) => setTempHpInput(e.target.value)}
+          onKeyDown={handleTempHpKey}
+          placeholder={hasTempHp ? String(combatant.tempHp) : '0'}
+          min={0}
+          className="input-medieval flex-1 text-xs py-1 text-center text-cyan-300 placeholder:text-cyan-700"
+        />
+        <button
+          id={`combatant-temphp-set-${combatant.id}`}
+          onClick={handleSetTempHpCommit}
+          title="Definir PV Temporários (sobrescreve)"
+          className="btn-secondary text-xs py-1 px-2.5 text-cyan-400 border-cyan-800/50 hover:border-cyan-600 shrink-0"
+        >
+          Definir
+        </button>
+        {hasTempHp && (
+          <button
+            id={`combatant-temphp-clear-${combatant.id}`}
+            onClick={() => onSetTempHp(combatant.id, 0)}
+            title="Remover PV Temporários"
+            className="text-[10px] text-crimson-bright hover:text-crimson-muted transition-colors shrink-0"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+
+      {/* Painel de Testes contra a Morte (Issue #10) */}
+      {combatant.type === 'player' && combatant.hpCurrent <= 0 && (
+        <div className={`mt-1 pt-2 border-t ${
+          isDead ? 'border-red-900/40' : 'border-crimson-muted/30'
+        }`}>
+          <p className={`text-[10px] uppercase tracking-wider mb-2 font-heading ${
+            isDead ? 'text-red-400' : isStabilized ? 'text-sky-400' : 'text-crimson-bright'
+          }`}>
+            ☠ Testes contra a Morte
+          </p>
+          <div className="flex gap-4">
+
+            {/* Sucessos */}
+            <div className={`flex items-center gap-1.5 ${
+              isDead ? 'opacity-30 pointer-events-none' : ''
+            }`}>
+              <span className="text-[10px] text-emerald-400 w-12">Sucessos</span>
+              {[0, 1, 2].map((i) => {
+                const filled = successes > i;
+                return (
+                  <button
+                    key={i}
+                    id={`ct-death-success-${combatant.id}-${i}`}
+                    onClick={() => onDeathSaveChange(combatant.id, 'successes', filled ? i : i + 1)}
+                    disabled={isDead}
+                    className={`w-5 h-5 rounded-full border-2 transition-all duration-150 ${
+                      filled
+                        ? 'bg-emerald-500 border-emerald-400 shadow-[0_0_5px_rgba(52,211,153,0.5)]'
+                        : 'bg-codex-bg border-codex-border hover:border-emerald-600'
+                    }`}
+                    title={isDead ? 'Bloqueado (3 falhas)' : filled ? 'Desmarcar' : 'Marcar sucesso'}
+                  />
+                );
+              })}
+            </div>
+
+            {/* Falhas */}
+            <div className={`flex items-center gap-1.5 ${
+              isStabilized ? 'opacity-30 pointer-events-none' : ''
+            }`}>
+              <span className={`text-[10px] w-10 ${
+                isDead ? 'text-red-400' : 'text-crimson-bright'
+              }`}>Falhas</span>
+              {[0, 1, 2].map((i) => {
+                const filled = failures > i;
+                return (
+                  <button
+                    key={i}
+                    id={`ct-death-failure-${combatant.id}-${i}`}
+                    onClick={() => onDeathSaveChange(combatant.id, 'failures', filled ? i : i + 1)}
+                    disabled={isStabilized}
+                    className={`w-5 h-5 rounded-full border-2 transition-all duration-150 ${
+                      filled
+                        ? isDead
+                          ? 'bg-red-700 border-red-400 shadow-[0_0_5px_rgba(239,68,68,0.6)]'
+                          : 'bg-crimson-primary border-crimson-bright shadow-[0_0_5px_rgba(220,38,38,0.5)]'
+                        : 'bg-codex-bg border-codex-border hover:border-crimson-muted'
+                    }`}
+                    title={isStabilized ? 'Bloqueado (estabilizado)' : filled ? 'Desmarcar' : 'Marcar falha'}
+                  />
+                );
+              })}
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -506,11 +676,37 @@ export default function CombatTrackerView() {
       ...encounter,
       combatants: encounter.combatants.map((c) => {
         if (c.id !== combatantId) return c;
-        const newHp = Math.max(0, Math.min(c.hpMax, c.hpCurrent + delta));
-        return { ...c, hpCurrent: newHp };
+
+        // --- PV Temporários absorvem dano primeiro (D&D 5e) ---
+        let remainingDelta = delta;
+        let newTempHp = c.tempHp ?? 0;
+        if (delta < 0 && newTempHp > 0) {
+          // Dano: desconta do tempHp antes
+          const absorbed = Math.min(newTempHp, -delta);
+          newTempHp -= absorbed;
+          remainingDelta = -((-delta) - absorbed); // dano restante após absorção
+        }
+        // Se for cura, tempHp não se altera
+
+        // Permite valores negativos (Dano Massivo - Issue #10). Sem teto acima do máximo.
+        const newHp = Math.min(c.hpMax, c.hpCurrent + remainingDelta);
+        // Reset death saves (inclusive previousHp) se o personagem for curado acima de 0
+        const deathSaves = newHp >= 1 ? { successes: 0, failures: 0 } : c.deathSaves;
+        return { ...c, hpCurrent: newHp, tempHp: newTempHp, deathSaves };
       }),
     };
 
+    await persistEncounter(updated);
+  }, [encounter, persistEncounter]);
+
+  const handleSetTempHp = useCallback(async (combatantId: string, value: number) => {
+    if (!encounter) return;
+    const updated: ActiveEncounter = {
+      ...encounter,
+      combatants: encounter.combatants.map((c) =>
+        c.id !== combatantId ? c : { ...c, tempHp: Math.max(0, value) }
+      ),
+    };
     await persistEncounter(updated);
   }, [encounter, persistEncounter]);
 
@@ -521,11 +717,61 @@ export default function CombatTrackerView() {
       ...encounter,
       combatants: encounter.combatants.map((c) => {
         if (c.id !== combatantId) return c;
-        const clamped = Math.max(0, Math.min(c.hpMax, value));
+        // Sem teto mínimo de zero (Issue #10)
+        const clamped = Math.min(c.hpMax, value);
         return { ...c, hpCurrent: clamped };
       }),
     };
 
+    await persistEncounter(updated);
+  }, [encounter, persistEncounter]);
+
+  const handleDeathSaveChange = useCallback(async (
+    combatantId: string,
+    type: 'successes' | 'failures',
+    value: number
+  ) => {
+    if (!encounter) return;
+    const updated: ActiveEncounter = {
+      ...encounter,
+      combatants: encounter.combatants.map((c) => {
+        if (c.id !== combatantId) return c;
+        const prev = c.deathSaves ?? { successes: 0, failures: 0 };
+        const newSaves = { ...prev, [type]: value };
+
+        // --- Lógica de Estabilização (3 sucessos) ---
+        if (type === 'successes') {
+          if (value === 3 && prev.successes < 3) {
+            newSaves.previousHp = c.hpCurrent;
+            return { ...c, hpCurrent: 0, deathSaves: newSaves };
+          }
+          if (value === 2 && prev.successes === 3) {
+            const restoredHp = prev.previousHp ?? c.hpCurrent;
+            const clearedSaves = { ...newSaves };
+            delete clearedSaves.previousHp;
+            return { ...c, hpCurrent: restoredHp, deathSaves: clearedSaves };
+          }
+        }
+
+        // --- Lógica de Morte (3 falhas) ---
+        if (type === 'failures') {
+          // Marcar a 3ª falha: memoriza HP negativo e sobe HP para 0
+          if (value === 3 && prev.failures < 3) {
+            newSaves.previousHp = c.hpCurrent;
+            return { ...c, hpCurrent: 0, deathSaves: newSaves };
+          }
+          // Desmarcar a 3ª falha (undo): restaura HP negativo se havia memória
+          if (value === 2 && prev.failures === 3) {
+            const restoredHp = prev.previousHp ?? c.hpCurrent;
+            const clearedSaves = { ...newSaves };
+            delete clearedSaves.previousHp;
+            return { ...c, hpCurrent: restoredHp, deathSaves: clearedSaves };
+          }
+        }
+
+        return { ...c, deathSaves: newSaves };
+      }),
+    };
     await persistEncounter(updated);
   }, [encounter, persistEncounter]);
 
@@ -798,6 +1044,8 @@ export default function CombatTrackerView() {
               isActive={combatant.isActiveTurn}
               onHpChange={handleHpChange}
               onSetHp={handleSetHp}
+              onSetTempHp={handleSetTempHp}
+              onDeathSaveChange={handleDeathSaveChange}
             />
           ))}
         </div>

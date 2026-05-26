@@ -486,9 +486,15 @@ function SheetForm({ sheet: initialSheet, onSave, onCancel, onAutoSave }: SheetF
     if (isNaN(parsed)) {
       parsed = 0;
     }
-    const clamped = Math.max(0, parsed);
-    setHpCurrentInput(String(clamped));
-    updateField('hpCurrent', clamped);
+    // Sem trava de zero: PV pode ser negativo (Dano Massivo - Issue #10)
+    setHpCurrentInput(String(parsed));
+    const updatedSheet = { ...sheet, hpCurrent: parsed, updatedAt: new Date().toISOString() };
+    // Reset death saves se curado (PV >= 1)
+    if (parsed >= 1 && (sheet.deathSaves?.successes || sheet.deathSaves?.failures)) {
+      updatedSheet.deathSaves = { successes: 0, failures: 0 };
+    }
+    setSheet(updatedSheet);
+    if (onAutoSave) onAutoSave(updatedSheet);
   };
 
   const handleHpMaxBlur = () => {
@@ -684,6 +690,81 @@ function SheetForm({ sheet: initialSheet, onSave, onCancel, onAutoSave }: SheetF
             </div>
           </div>
         </div>
+
+        {/* Testes contra a Morte (Issue #10) — só para Jogadores com PV <= 0 */}
+        {sheet.type === 'player' && sheet.hpCurrent <= 0 && (
+          <div>
+            <p className="section-title mb-3 text-crimson-bright">☠ Testes contra a Morte</p>
+            <div className="card p-4 border-crimson-muted/40 bg-crimson-primary/5 flex flex-col gap-3">
+              {/* Sucessos */}
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-emerald-400 font-medium w-16">Sucessos</span>
+                <div className="flex gap-2">
+                  {[0, 1, 2].map((i) => {
+                    const filled = (sheet.deathSaves?.successes ?? 0) > i;
+                    return (
+                      <button
+                        key={i}
+                        id={`death-save-success-${i}`}
+                        onClick={() => {
+                          const current = sheet.deathSaves?.successes ?? 0;
+                          const next = filled ? i : i + 1;
+                          const updatedSheet = {
+                            ...sheet,
+                            deathSaves: { successes: next, failures: sheet.deathSaves?.failures ?? 0 },
+                            updatedAt: new Date().toISOString(),
+                          };
+                          setSheet(updatedSheet);
+                          if (onAutoSave) onAutoSave(updatedSheet);
+                        }}
+                        className={`w-7 h-7 rounded-full border-2 transition-all duration-150 ${
+                          filled
+                            ? 'bg-emerald-500 border-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.5)]'
+                            : 'bg-codex-bg border-codex-border hover:border-emerald-600'
+                        }`}
+                        title={filled ? 'Clique para desmarcar' : 'Clique para marcar sucesso'}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+              {/* Falhas */}
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-crimson-bright font-medium w-16">Falhas</span>
+                <div className="flex gap-2">
+                  {[0, 1, 2].map((i) => {
+                    const filled = (sheet.deathSaves?.failures ?? 0) > i;
+                    return (
+                      <button
+                        key={i}
+                        id={`death-save-failure-${i}`}
+                        onClick={() => {
+                          const next = filled ? i : i + 1;
+                          const updatedSheet = {
+                            ...sheet,
+                            deathSaves: { successes: sheet.deathSaves?.successes ?? 0, failures: next },
+                            updatedAt: new Date().toISOString(),
+                          };
+                          setSheet(updatedSheet);
+                          if (onAutoSave) onAutoSave(updatedSheet);
+                        }}
+                        className={`w-7 h-7 rounded-full border-2 transition-all duration-150 ${
+                          filled
+                            ? 'bg-crimson-primary border-crimson-bright shadow-[0_0_6px_rgba(220,38,38,0.5)]'
+                            : 'bg-codex-bg border-codex-border hover:border-crimson-muted'
+                        }`}
+                        title={filled ? 'Clique para desmarcar' : 'Clique para marcar falha'}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+              <p className="text-[10px] text-text-muted italic">
+                3 Sucessos = estabilizado · 3 Falhas = morte instantânea
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Notas */}
         <div>
