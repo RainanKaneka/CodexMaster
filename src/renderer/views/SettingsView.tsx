@@ -17,7 +17,7 @@ export default function SettingsView() {
         <div className="space-y-3 text-sm text-text-secondary">
           <div className="flex justify-between">
             <span className="text-text-muted">Versão</span>
-            <span className="font-mono text-gold-primary">0.1.0 MVP</span>
+            <span className="font-mono text-gold-primary">1.1.0</span>
           </div>
           <div className="flex justify-between">
             <span className="text-text-muted">Stack</span>
@@ -29,7 +29,7 @@ export default function SettingsView() {
           </div>
           <div className="flex justify-between">
             <span className="text-text-muted">Fase</span>
-            <span className="text-xs">MVP — Fichas, Mapas e Dados</span>
+            <span className="text-xs">Fase 1 — VTT Offline Integrado</span>
           </div>
         </div>
 

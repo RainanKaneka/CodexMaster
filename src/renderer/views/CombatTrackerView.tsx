@@ -121,10 +121,11 @@ interface CombatantRowProps {
   onHpChange: (id: string, delta: number) => void;
   onSetHp: (id: string, value: number) => void;
   onSetTempHp: (id: string, value: number) => void;
+  onRemove: (id: string) => void;
   onDeathSaveChange: (id: string, type: 'successes' | 'failures', value: number) => void;
 }
 
-function CombatantRow({ combatant, isActive, onHpChange, onSetHp, onSetTempHp, onDeathSaveChange }: CombatantRowProps) {
+function CombatantRow({ combatant, isActive, onHpChange, onSetHp, onSetTempHp, onRemove, onDeathSaveChange }: CombatantRowProps) {
   const [deltaInput, setDeltaInput] = useState('');
   const [hpInput, setHpInput] = useState<string | null>(null); // null = não editando diretamente
   const [tempHpInput, setTempHpInput] = useState(''); // input para PV temp
@@ -192,7 +193,7 @@ function CombatantRow({ combatant, isActive, onHpChange, onSetHp, onSetTempHp, o
       className={`
         relative flex flex-col gap-2 p-3 rounded-lg border transition-all duration-200
         ${isActive
-          ? 'bg-codex-surface2 border-gold-primary shadow-gold-sm'
+          ? 'bg-codex-surface2 border-gold-primary shadow-[0_0_18px_rgba(212,175,55,0.25)] scale-[1.012] z-10'
           : isStabilized
           ? 'bg-sky-950/20 border-sky-800/40 hover:border-sky-700/60'
           : isDead
@@ -203,9 +204,19 @@ function CombatantRow({ combatant, isActive, onHpChange, onSetHp, onSetTempHp, o
         }
       `}
     >
-      {/* Indicador de Turno Ativo */}
+      {/* Botão Remover — canto superior direito, discreto */}
+      <button
+        id={`combatant-remove-${combatant.id}`}
+        onClick={() => onRemove(combatant.id)}
+        title="Remover do combate"
+        className="absolute top-2 right-2 w-5 h-5 flex items-center justify-center rounded text-text-muted hover:text-crimson-bright hover:bg-crimson-primary/10 transition-all duration-150 text-[10px] leading-none"
+      >
+        ✕
+      </button>
+
+      {/* Indicador de Turno Ativo — barra lateral pulsante */}
       {isActive && (
-        <span className="absolute -left-px top-1/2 -translate-y-1/2 w-0.5 h-10 bg-gold-primary rounded-r-full" />
+        <span className="absolute -left-px top-1/2 -translate-y-1/2 w-1 h-12 bg-gold-primary rounded-r-full animate-pulse" />
       )}
 
       {/* Linha 1: Nome, Tipo, Iniciativa */}
@@ -516,9 +527,20 @@ export default function CombatTrackerView() {
   });
   const [stagingSearch, setStagingSearch] = useState('');
   const [stagingTypeFilter, setStagingTypeFilter] = useState<'all' | 'player' | 'creature'>('all');
+  /**
+   * Mapa de iniciativas manuais para o staging: id do combatente → string digitada.
+   * String vazia = "auto" (o sistema rolará 1d20 + mod Dex ao iniciar).
+   */
+  const [stagingInitiatives, setStagingInitiatives] = useState<Record<string, string>>({});
 
   // --- Estado de Combate Ativo ---
   const [encounter, setEncounter] = useState<ActiveEncounter | null>(activeEncounter);
+
+  // --- Estado do Painel de Adição em Combate (mid-combat insertion) ---
+  const [showAddPanel, setShowAddPanel] = useState(false);
+  const [addSheetId, setAddSheetId] = useState('');
+  const [addInitInput, setAddInitInput] = useState('');
+  const [addSearch, setAddSearch] = useState('');
 
   // --- Filtragem de Fichas no Painel de Seleção ---
   const filteredSheets = useMemo(() => {
@@ -567,6 +589,12 @@ export default function CombatTrackerView() {
 
   const handleRemoveFromStaging = useCallback((id: string) => {
     setStagingCombatants((prev) => prev.filter((c) => c.id !== id));
+    // Remove a iniciativa manual associada para não vazar estado órfão
+    setStagingInitiatives((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
   }, []);
 
   const handleRenameStagingCombatant = useCallback((id: string, newName: string) => {
@@ -577,7 +605,13 @@ export default function CombatTrackerView() {
 
   const handleClearStaging = () => {
     setStagingCombatants([]);
+    setStagingInitiatives({});
   };
+
+  /** Atualiza a iniciativa manual de um combatente no staging (string vazia = auto). */
+  const handleStagingInitiativeChange = useCallback((id: string, value: string) => {
+    setStagingInitiatives((prev) => ({ ...prev, [id]: value }));
+  }, []);
 
   // =============================================================================
   // Iniciar Combate: Rola Iniciativas e Ordena
@@ -586,12 +620,17 @@ export default function CombatTrackerView() {
   const handleStartCombat = async () => {
     if (stagingCombatants.length === 0) return;
 
-    // Rola 1d20 + mod(Destreza) para cada combatente
-    const withInitiatives = stagingCombatants.map((c) => ({
-      ...c,
-      initiative: rollInitiative(c.dexterityModifier),
-      isActiveTurn: false,
-    }));
+    // Lógica Híbrida: usa iniciativa manual se preenchida, auto-rola caso contrário.
+    // Isso permite que jogadores digitem o resultado do dado físico deles,
+    // enquanto monstros e NPCs têm a iniciativa rolada automaticamente.
+    const withInitiatives = stagingCombatants.map((c) => {
+      const manualStr = (stagingInitiatives[c.id] ?? '').trim();
+      const manualNum = parseInt(manualStr, 10);
+      const initiative = manualStr !== '' && !isNaN(manualNum)
+        ? manualNum                          // Mantém o valor digitado pelo Mestre
+        : rollInitiative(c.dexterityModifier); // Auto-rola 1d20 + mod Dex
+      return { ...c, initiative, isActiveTurn: false };
+    });
 
     // Ordena por iniciativa (com desempates D&D 5e)
     const sorted = sortByInitiative(withInitiatives);
@@ -608,6 +647,7 @@ export default function CombatTrackerView() {
     try {
       await saveActiveEncounter(newEncounter);
       setEncounter(newEncounter);
+      setStagingInitiatives({}); // limpa o estado híbrido após iniciar
       setMode('active');
     } catch {
       // Erro já tratado no contexto
@@ -787,6 +827,106 @@ export default function CombatTrackerView() {
   };
 
   // =============================================================================
+  // Handlers de Mid-Combat Insertion / Removal
+  // =============================================================================
+
+  /**
+   * Remove um combatente do encontro em andamento com correção de turnIndex.
+   *
+   * Regras (conforme Issue #11 spec):
+   *   - removedIdx < turnIndex  → turnIndex-- (alguém antes foi retirado)
+   *   - removedIdx === turnIndex → mantém turnIndex (próximo assume o slot)
+   *   - removedIdx > turnIndex  → turnIndex inalterado
+   *   - Se ficar só 1 combatente, clampamos o índice a 0.
+   */
+  const handleRemoveCombatant = useCallback(async (combatantId: string) => {
+    if (!encounter) return;
+    const { combatants, turnIndex, round } = encounter;
+    if (combatants.length <= 1) return; // não deixa o combate vazio
+
+    const removedIdx = combatants.findIndex((c) => c.id === combatantId);
+    if (removedIdx === -1) return;
+
+    const remaining = combatants.filter((c) => c.id !== combatantId);
+
+    // Calcula o novo índice de forma segura
+    let newTurnIndex = turnIndex;
+    if (removedIdx < turnIndex) {
+      newTurnIndex = turnIndex - 1;
+    } else if (removedIdx === turnIndex) {
+      // O ativo foi removido: o próximo assume; clampa se era o último
+      newTurnIndex = Math.min(turnIndex, remaining.length - 1);
+    }
+    // removedIdx > turnIndex → nenhuma mudança
+
+    const updated: ActiveEncounter = {
+      combatants: remaining.map((c, i) => ({ ...c, isActiveTurn: i === newTurnIndex })),
+      round,
+      turnIndex: newTurnIndex,
+    };
+    await persistEncounter(updated);
+  }, [encounter, persistEncounter]);
+
+  /**
+   * Insere uma ficha no combate em andamento com uma iniciativa manual.
+   *
+   * Algoritmo (ID-safe):
+   *   1. Memoriza o ID do combatente ativo atual.
+   *   2. Instancia o novo combatente com a iniciativa fornecida.
+   *   3. Reordena toda a lista por iniciativa.
+   *   4. Encontra o índice do combatente previamente ativo pelo ID (findIndex).
+   *   5. Atualiza o turnIndex para esse novo índice — o turno não pula.
+   */
+  const handleAddCombatant = useCallback(async (sheet: CharacterSheet, initiative: number) => {
+    if (!encounter) return;
+
+    const { combatants, round } = encounter;
+    const activeId = combatants[encounter.turnIndex]?.id;
+
+    // Clona sem sufixo extra se for único; usa sufixo de letra para duplicatas
+    const existingCount = combatants.filter((c) => c.sheetId === sheet.id).length;
+    let displayName = sheet.name;
+    if (sheet.type === 'creature' || existingCount > 0) {
+      displayName = `${sheet.name} ${getCloneSuffix(existingCount)}`;
+    }
+
+    const newCombatant: Combatant = {
+      ...instantiateCombatant(sheet, displayName),
+      initiative,
+    };
+
+    const sorted = sortByInitiative([...combatants, newCombatant]);
+
+    // Recalcula índice pelo ID do ativo anterior
+    const newTurnIndex = activeId
+      ? Math.max(0, sorted.findIndex((c) => c.id === activeId))
+      : encounter.turnIndex;
+
+    const updated: ActiveEncounter = {
+      combatants: sorted.map((c, i) => ({ ...c, isActiveTurn: i === newTurnIndex })),
+      round,
+      turnIndex: newTurnIndex,
+    };
+    await persistEncounter(updated);
+
+    // Fecha o painel após inserção
+    setShowAddPanel(false);
+    setAddSheetId('');
+    setAddInitInput('');
+    setAddSearch('');
+  }, [encounter, persistEncounter]);
+
+  /** Auto-rola iniciativa (1d20 + mod Dex) para a ficha selecionada no painel */
+  const handleAutoRollInit = useCallback(() => {
+    if (!addSheetId) return;
+    const sheet = sheets.find((s) => s.id === addSheetId);
+    if (!sheet) return;
+    const dexMod = calculateModifier(sheet.attributes.dexterity);
+    const rolled = Math.floor(Math.random() * 20) + 1 + dexMod;
+    setAddInitInput(String(rolled));
+  }, [addSheetId, sheets]);
+
+  // =============================================================================
   // Dados derivados do Encontro Ativo
   // =============================================================================
 
@@ -924,6 +1064,8 @@ export default function CombatTrackerView() {
                     key={combatant.id}
                     combatant={combatant}
                     index={idx}
+                    manualInitiative={stagingInitiatives[combatant.id] ?? ''}
+                    onInitiativeChange={handleStagingInitiativeChange}
                     onRemove={handleRemoveFromStaging}
                     onRename={handleRenameStagingCombatant}
                   />
@@ -974,6 +1116,7 @@ export default function CombatTrackerView() {
 
           {/* Info do Round */}
           <div className="flex items-center gap-5">
+            {/* Rodada */}
             <div className="flex flex-col items-center">
               <span className="text-[10px] text-text-muted uppercase tracking-wider">Rodada</span>
               <span className="font-heading text-2xl text-gold-primary leading-none">
@@ -983,9 +1126,12 @@ export default function CombatTrackerView() {
 
             <div className="w-px h-10 bg-codex-border" />
 
+            {/* Turno atual + posição na fila */}
             <div className="flex flex-col">
-              <span className="text-[10px] text-text-muted uppercase tracking-wider">Turno atual</span>
-              <span className="text-sm font-medium text-text-primary">
+              <span className="text-[10px] text-text-muted uppercase tracking-wider">
+                Turno {encounter.turnIndex + 1}/{encounter.combatants.length}
+              </span>
+              <span className="text-sm font-medium text-gold-primary">
                 {activeCombatant ? activeCombatant.name : '—'}
               </span>
             </div>
@@ -1023,6 +1169,19 @@ export default function CombatTrackerView() {
             </button>
             <div className="w-px h-8 bg-codex-border mx-1" />
             <button
+              id="combat-add-btn"
+              onClick={() => { setShowAddPanel((v) => !v); setAddSearch(''); setAddSheetId(''); setAddInitInput(''); }}
+              className={`text-xs py-2 px-3 rounded-lg border transition-all duration-150 ${
+                showAddPanel
+                  ? 'bg-gold-dim border-gold-primary text-gold-primary'
+                  : 'border-codex-border text-text-muted hover:border-gold-dim hover:text-gold-muted'
+              }`}
+              title="Adicionar participante ao combate"
+            >
+              ➕ Reforços
+            </button>
+            <div className="w-px h-8 bg-codex-border mx-1" />
+            <button
               id="combat-end-btn"
               onClick={handleEndCombat}
               className="text-xs text-crimson-bright hover:text-crimson-muted border border-crimson-muted/30 hover:border-crimson-muted py-2 px-3 rounded-lg transition-all duration-150"
@@ -1031,6 +1190,168 @@ export default function CombatTrackerView() {
               🏳️ Encerrar
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* ===== Painel de Adição em Combate ===== */}
+      {showAddPanel && (
+        <div className="shrink-0 bg-codex-surface border-b border-gold-dim/40 px-5 py-3">
+          <p className="text-[10px] text-gold-muted uppercase tracking-wider mb-2">⚔ Inserir Reforços</p>
+          <div className="flex items-end gap-2 flex-wrap">
+
+            {/* Busca + Listbox de Fichas */}
+            <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
+              {/* Input de busca — filtra reativamente */}
+              <input
+                id="add-combatant-search"
+                type="text"
+                value={addSearch}
+                onChange={(e) => {
+                  const term = e.target.value;
+                  setAddSearch(term);
+                  // Limpa a seleção se a ficha atual sair do filtro
+                  if (addSheetId) {
+                    const sheet = sheets.find((s) => s.id === addSheetId);
+                    if (sheet && term && !sheet.name.toLowerCase().includes(term.toLowerCase())) {
+                      setAddSheetId('');
+                      setAddInitInput('');
+                    }
+                  }
+                }}
+                placeholder="Buscar ficha..."
+                className="input-medieval text-xs py-1"
+              />
+
+              {/* Listbox de resultados — reativo ao filtro */}
+              {(() => {
+                const q = addSearch.toLowerCase().trim();
+                const filtered = sheets
+                  .filter((s) => !q || s.name.toLowerCase().includes(q))
+                  .sort((a, b) => {
+                    if (a.type !== b.type) return a.type === 'player' ? -1 : 1;
+                    return a.name.localeCompare(b.name, 'pt-BR');
+                  });
+
+                if (filtered.length === 0) {
+                  return (
+                    <div className="flex items-center justify-center h-10 rounded-lg border border-codex-border bg-codex-bg text-[10px] text-text-muted italic">
+                      Nenhuma ficha encontrada para "{addSearch}"
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="max-h-32 overflow-y-auto rounded-lg border border-codex-border bg-codex-bg flex flex-col divide-y divide-codex-border/40">
+                    {filtered.map((s) => {
+                      const dex = calculateModifier(s.attributes.dexterity);
+                      const dexStr = dex >= 0 ? `+${dex}` : String(dex);
+                      const isSelected = addSheetId === s.id;
+                      return (
+                        <button
+                          key={s.id}
+                          id={`add-sheet-option-${s.id}`}
+                          type="button"
+                          onClick={() => { setAddSheetId(s.id); setAddInitInput(''); }}
+                          className={`
+                            flex items-center gap-2 px-2.5 py-1.5 text-left text-xs transition-colors duration-100
+                            ${isSelected
+                              ? 'bg-gold-dim text-gold-primary'
+                              : 'text-text-secondary hover:bg-codex-surface hover:text-text-primary'
+                            }
+                          `}
+                        >
+                          <span className="shrink-0">{s.type === 'player' ? '🧙' : '👹'}</span>
+                          <span className="flex-1 truncate font-medium">{s.name}</span>
+                          <span className="text-[10px] text-text-muted shrink-0">CA {s.armorClass} · Dex {dexStr}</span>
+                          {isSelected && <span className="text-gold-primary shrink-0 text-[10px]">✓</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Iniciativa + Auto-Roll */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] text-text-muted uppercase tracking-wider">Iniciativa</label>
+              <div className="flex items-center gap-1">
+                <input
+                  id="add-combatant-initiative"
+                  type="number"
+                  value={addInitInput}
+                  onChange={(e) => setAddInitInput(e.target.value)}
+                  placeholder="0"
+                  className="input-medieval text-xs py-1 w-16 text-center"
+                />
+                <button
+                  id="add-combatant-autoroll"
+                  onClick={handleAutoRollInit}
+                  disabled={!addSheetId}
+                  title={addSheetId ? 'Auto-rolar 1d20 + mod Dex' : 'Selecione uma ficha primeiro'}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg border border-codex-border text-base hover:border-gold-dim hover:bg-gold-dim/20 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  🎲
+                </button>
+              </div>
+            </div>
+
+            {/* Botão Inserir */}
+            <button
+              id="add-combatant-confirm"
+              onClick={() => {
+                const sheet = sheets.find((s) => s.id === addSheetId);
+                const init = parseInt(addInitInput, 10);
+                if (sheet && !isNaN(init)) handleAddCombatant(sheet, init);
+              }}
+              disabled={!addSheetId || addInitInput === '' || isNaN(parseInt(addInitInput, 10))}
+              className="btn-primary text-xs py-2 px-4 disabled:opacity-40 disabled:cursor-not-allowed self-end"
+            >
+              Inserir no Combate
+            </button>
+
+            {/* Info da ficha selecionada */}
+            {addSheetId && (() => {
+              const s = sheets.find((sh) => sh.id === addSheetId);
+              if (!s) return null;
+              const dex = calculateModifier(s.attributes.dexterity);
+              return (
+                <p className="text-[10px] text-text-muted w-full">
+                  PV {s.hpCurrent}/{s.hpMax} · CA {s.armorClass} · Dex {dex >= 0 ? `+${dex}` : dex}
+                </p>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* ===== Trilha de Ordem de Iniciativa ===== */}
+      <div className="shrink-0 px-4 py-2 border-b border-codex-border bg-codex-bg overflow-x-auto">
+        <div className="flex items-center gap-1.5 min-w-max">
+          <span className="text-[9px] text-text-muted uppercase tracking-widest shrink-0 mr-1">Fila:</span>
+          {encounter.combatants.map((c, i) => {
+            const isCurrent = i === encounter.turnIndex;
+            const isDefeated = c.hpCurrent <= 0;
+            return (
+              <div
+                key={c.id}
+                title={`${c.name} — Init ${c.initiative}`}
+                className={`
+                  flex items-center gap-1 px-2 py-0.5 rounded-full border text-[9px] font-mono transition-all duration-200
+                  ${isCurrent
+                    ? 'bg-gold-dim border-gold-primary text-gold-primary font-bold shadow-[0_0_8px_rgba(212,175,55,0.4)]'
+                    : isDefeated
+                    ? 'bg-codex-bg border-codex-border/40 text-text-muted opacity-40 line-through'
+                    : 'bg-codex-bg border-codex-border text-text-secondary'
+                  }
+                `}
+              >
+                <span>{isCurrent ? '▶' : `${i + 1}.`}</span>
+                <span className="max-w-[60px] truncate">{c.name.split(' ')[0]}</span>
+                <span className="opacity-60">{c.initiative}</span>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -1045,6 +1366,7 @@ export default function CombatTrackerView() {
               onHpChange={handleHpChange}
               onSetHp={handleSetHp}
               onSetTempHp={handleSetTempHp}
+              onRemove={handleRemoveCombatant}
               onDeathSaveChange={handleDeathSaveChange}
             />
           ))}
@@ -1061,11 +1383,14 @@ export default function CombatTrackerView() {
 interface StagingCombatantRowProps {
   combatant: Combatant;
   index: number;
+  /** Valor atual do input de iniciativa manual (string vazia = auto). */
+  manualInitiative: string;
+  onInitiativeChange: (id: string, value: string) => void;
   onRemove: (id: string) => void;
   onRename: (id: string, newName: string) => void;
 }
 
-function StagingCombatantRow({ combatant, index, onRemove, onRename }: StagingCombatantRowProps) {
+function StagingCombatantRow({ combatant, index, manualInitiative, onInitiativeChange, onRemove, onRename }: StagingCombatantRowProps) {
   const [editing, setEditing] = useState(false);
   const [nameInput, setNameInput] = useState(combatant.name);
 
@@ -1119,9 +1444,35 @@ function StagingCombatantRow({ combatant, index, onRemove, onRename }: StagingCo
             {combatant.name}
           </button>
         )}
+      {/* Info base: PV, CA, mod Dex */}
         <p className="text-[10px] text-text-muted mt-0.5">
-          PV {combatant.hpMax} · CA {combatant.armorClass} · Init {dexModStr}
+          PV {combatant.hpMax} · CA {combatant.armorClass} · Dex {dexModStr}
         </p>
+      </div>
+
+      {/* Input de Iniciativa Manual */}
+      <div className="flex flex-col items-center gap-0.5 shrink-0" title="Deixe em branco para rolar automaticamente">
+        <label className="text-[9px] text-text-muted uppercase tracking-wider">Init</label>
+        <div className="relative">
+          <input
+            id={`staging-init-input-${combatant.id}`}
+            type="number"
+            value={manualInitiative}
+            onChange={(e) => onInitiativeChange(combatant.id, e.target.value)}
+            placeholder="Auto"
+            className="input-medieval text-xs py-0.5 w-14 text-center"
+          />
+          {/* Badge indicativo: 'M' se manual, '🎲' se será auto-rolado */}
+          {manualInitiative !== '' && !isNaN(parseInt(manualInitiative, 10)) ? (
+            <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-gold-primary rounded-full text-[7px] flex items-center justify-center text-codex-bg font-bold" title="Iniciativa manual">
+              M
+            </span>
+          ) : (
+            <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-codex-border rounded-full text-[7px] flex items-center justify-center text-text-muted" title="Será rolada automaticamente">
+              🎲
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Remover */}
