@@ -54,8 +54,9 @@ const SCHOOL_COLORS: Record<SpellSchool, string> = {
   'Transmutação': 'text-emerald-400',
 };
 
-function levelLabel(level: number): string {
-  return level === 0 ? 'Truque' : `Nível ${level}`;
+function levelLabel(level: number | string): string {
+  if (level === 0 || level === '0') return 'Truque';
+  return typeof level === 'number' ? `Nível ${level}` : String(level);
 }
 
 // ---- Factories de Entidades Novas ----
@@ -102,6 +103,7 @@ interface SpellFormProps {
 }
 
 function SpellForm({ spell: initial, onSave, onCancel }: SpellFormProps) {
+  const { homebrewSettings } = useDatabase();
   const [spell, setSpell] = useState<Spell>(initial);
 
   const set = <K extends keyof Spell>(key: K, val: Spell[K]) =>
@@ -166,10 +168,17 @@ function SpellForm({ spell: initial, onSave, onCancel }: SpellFormProps) {
             <select
               id="spell-level"
               value={spell.level}
-              onChange={(e) => set('level', parseInt(e.target.value, 10))}
+              onChange={(e) => {
+                const val = e.target.value;
+                const numVal = Number(val);
+                set('level', isNaN(numVal) ? val : numVal);
+              }}
               className="input-medieval"
             >
               {SPELL_LEVELS.map((l) => (
+                <option key={l} value={l}>{levelLabel(l)}</option>
+              ))}
+              {homebrewSettings.customLevels.map((l) => (
                 <option key={l} value={l}>{levelLabel(l)}</option>
               ))}
             </select>
@@ -186,6 +195,9 @@ function SpellForm({ spell: initial, onSave, onCancel }: SpellFormProps) {
             >
               {SPELL_SCHOOLS.map((s) => (
                 <option key={s} value={s}>{s}</option>
+              ))}
+              {homebrewSettings.customMagicSchools.map((s) => (
+                <option key={`hb-${s.name}`} value={s.name}>{s.name} (Custom)</option>
               ))}
             </select>
           </div>
@@ -443,6 +455,7 @@ interface SpellDetailProps {
 }
 
 function SpellDetail({ spell, onEdit, onDelete }: SpellDetailProps) {
+  const { homebrewSettings } = useDatabase();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const compStr = [
     spell.components.verbal   ? 'V' : '',
@@ -456,7 +469,14 @@ function SpellDetail({ spell, onEdit, onDelete }: SpellDetailProps) {
       <div className="flex items-start justify-between gap-2">
         <div>
           <h2 className="font-heading text-xl text-text-primary leading-tight">{spell.name}</h2>
-          <p className={`text-sm font-medium mt-0.5 ${SCHOOL_COLORS[spell.school]}`}>
+          <p 
+            className={`text-sm font-medium mt-0.5 ${SCHOOL_COLORS[spell.school as SpellSchool] || ''}`}
+            style={
+              !SCHOOL_COLORS[spell.school as SpellSchool] 
+                ? { color: homebrewSettings.customMagicSchools.find(s => s.name === spell.school)?.color || '#888' } 
+                : undefined
+            }
+          >
             {levelLabel(spell.level)} · {spell.school}
           </p>
         </div>
@@ -625,6 +645,113 @@ function ItemDetail({ item, onEdit, onDelete }: ItemDetailProps) {
 }
 
 // =============================================================================
+// Sub-componente: Gerenciador de Homebrew (Issue #9)
+// =============================================================================
+
+function HomebrewManager({ onClose }: { onClose: () => void }) {
+  const { homebrewSettings, saveHomebrewSettings } = useDatabase();
+  const [newSchoolName, setNewSchoolName] = useState('');
+  const [newSchoolColor, setNewSchoolColor] = useState('#eab308'); // Dourado padrão
+  const [newLevel, setNewLevel] = useState('');
+
+  const addSchool = () => {
+    if (!newSchoolName.trim()) return;
+    const next = { ...homebrewSettings };
+    next.customMagicSchools.push({ name: newSchoolName.trim(), color: newSchoolColor });
+    saveHomebrewSettings(next);
+    setNewSchoolName('');
+  };
+
+  const removeSchool = (idx: number) => {
+    const next = { ...homebrewSettings };
+    next.customMagicSchools.splice(idx, 1);
+    saveHomebrewSettings(next);
+  };
+
+  const addLevel = () => {
+    if (!newLevel.trim()) return;
+    const next = { ...homebrewSettings };
+    next.customLevels.push(newLevel.trim());
+    saveHomebrewSettings(next);
+    setNewLevel('');
+  };
+
+  const removeLevel = (idx: number) => {
+    const next = { ...homebrewSettings };
+    next.customLevels.splice(idx, 1);
+    saveHomebrewSettings(next);
+  };
+
+  return (
+    <div className="flex flex-col h-full overflow-y-auto p-5 gap-6 animate-fade-in">
+      <div className="flex items-center justify-between border-b border-codex-border pb-3">
+        <h2 className="font-heading text-xl text-gold-primary leading-tight">Configurações Homebrew</h2>
+        <button onClick={onClose} className="btn-secondary text-xs py-1.5">Fechar</button>
+      </div>
+
+      <div className="flex flex-col gap-6">
+        {/* Escolas de Magia Customizadas */}
+        <div className="card p-4">
+          <h3 className="font-heading text-lg text-text-primary mb-3">Escolas de Magia</h3>
+          <div className="flex gap-2 mb-4">
+            <input 
+              type="text" 
+              value={newSchoolName} 
+              onChange={e => setNewSchoolName(e.target.value)} 
+              placeholder="Nome da Escola..." 
+              className="input-medieval flex-1"
+            />
+            <input 
+              type="color" 
+              value={newSchoolColor} 
+              onChange={e => setNewSchoolColor(e.target.value)} 
+              className="h-10 w-12 rounded cursor-pointer border border-codex-border bg-codex-bg"
+            />
+            <button onClick={addSchool} className="btn-primary px-3 text-xs">Adicionar</button>
+          </div>
+          <div className="flex flex-col gap-2">
+            {homebrewSettings.customMagicSchools.length === 0 && <p className="text-xs text-text-muted italic">Nenhuma escola customizada.</p>}
+            {homebrewSettings.customMagicSchools.map((school, i) => (
+              <div key={i} className="flex items-center justify-between bg-codex-bg border border-codex-border p-2 rounded">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: school.color }} />
+                  <span className="text-sm font-medium" style={{ color: school.color }}>{school.name}</span>
+                </div>
+                <button onClick={() => removeSchool(i)} className="text-crimson-bright hover:text-crimson-muted text-xs">Remover</button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Níveis Customizados */}
+        <div className="card p-4">
+          <h3 className="font-heading text-lg text-text-primary mb-3">Níveis de Poder / Círculos</h3>
+          <div className="flex gap-2 mb-4">
+            <input 
+              type="text" 
+              value={newLevel} 
+              onChange={e => setNewLevel(e.target.value)} 
+              placeholder="Ex: Nível Épico" 
+              className="input-medieval flex-1"
+            />
+            <button onClick={addLevel} className="btn-primary px-3 text-xs">Adicionar</button>
+          </div>
+          <div className="flex flex-col gap-2">
+            {homebrewSettings.customLevels.length === 0 && <p className="text-xs text-text-muted italic">Nenhum nível customizado.</p>}
+            {homebrewSettings.customLevels.map((lvl, i) => (
+              <div key={i} className="flex items-center justify-between bg-codex-bg border border-codex-border p-2 rounded">
+                <span className="text-sm text-text-secondary">{lvl}</span>
+                <button onClick={() => removeLevel(i)} className="text-crimson-bright hover:text-crimson-muted text-xs">Remover</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// =============================================================================
 // Sub-componente: Painel de Filtros para Magias
 // =============================================================================
 
@@ -640,6 +767,10 @@ interface SpellFilterPanelProps {
 }
 
 function SpellFilterPanel({ filters, onChange }: SpellFilterPanelProps) {
+  const { homebrewSettings } = useDatabase();
+  const allLevels = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, ...homebrewSettings.customLevels];
+  const allSchools = [...SPELL_SCHOOLS, ...homebrewSettings.customMagicSchools.map(s => s.name)];
+
   const toggleSet = <T,>(set: Set<T>, value: T): Set<T> => {
     const next = new Set(set);
     if (next.has(value)) next.delete(value);
@@ -666,7 +797,7 @@ function SpellFilterPanel({ filters, onChange }: SpellFilterPanelProps) {
       <div>
         <p className="text-[10px] text-text-muted uppercase tracking-wider mb-2">Nível</p>
         <div className="flex flex-wrap gap-1">
-          {SPELL_LEVELS.map((l) => (
+          {allLevels.map((l) => (
             <button
               key={l}
               id={`filter-spell-level-${l}`}
@@ -679,7 +810,7 @@ function SpellFilterPanel({ filters, onChange }: SpellFilterPanelProps) {
                 }
               `}
             >
-              {l === 0 ? 'Truque' : l}
+              {levelLabel(l, homebrewSettings)}
             </button>
           ))}
         </div>
@@ -689,22 +820,29 @@ function SpellFilterPanel({ filters, onChange }: SpellFilterPanelProps) {
       <div>
         <p className="text-[10px] text-text-muted uppercase tracking-wider mb-2">Escola</p>
         <div className="flex flex-col gap-1">
-          {SPELL_SCHOOLS.map((school) => (
-            <button
-              key={school}
-              id={`filter-spell-school-${school.toLowerCase()}`}
-              onClick={() => onChange({ ...filters, schools: toggleSet(filters.schools, school) })}
-              className={`
-                px-2 py-1 rounded text-xs border text-left transition-all duration-150
-                ${filters.schools.has(school)
-                  ? `bg-codex-surface2 border-gold-dim ${SCHOOL_COLORS[school]}`
-                  : 'bg-codex-bg border-codex-border text-text-muted hover:border-codex-surface2 hover:text-text-secondary'
-                }
-              `}
-            >
-              {school}
-            </button>
-          ))}
+          {allSchools.map((school) => {
+            const customSchool = homebrewSettings.customMagicSchools.find(s => s.name === school);
+            const isSelected = filters.schools.has(school);
+            const defaultClass = SCHOOL_COLORS[school as SpellSchool];
+            
+            return (
+              <button
+                key={school}
+                id={`filter-spell-school-${school.toLowerCase()}`}
+                onClick={() => onChange({ ...filters, schools: toggleSet(filters.schools, school) })}
+                className={`
+                  px-2 py-1 rounded text-xs border text-left transition-all duration-150
+                  ${isSelected
+                    ? `bg-codex-surface2 border-gold-dim ${defaultClass || ''}`
+                    : 'bg-codex-bg border-codex-border text-text-muted hover:border-codex-surface2 hover:text-text-secondary'
+                  }
+                `}
+                style={isSelected && customSchool ? { color: customSchool.color } : undefined}
+              >
+                {school}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -855,7 +993,7 @@ type CompendiumTab = 'spells' | 'items';
 type PanelMode = 'view' | 'edit' | 'create';
 
 export default function CompendiumView() {
-  const { spells, items, saveSpell, deleteSpell, saveItem, deleteItem } = useDatabase();
+  const { spells, items, saveSpell, deleteSpell, saveItem, deleteItem, homebrewSettings, saveHomebrewSettings } = useDatabase();
 
   const [activeTab, setActiveTab] = useState<CompendiumTab>('spells');
 
@@ -863,6 +1001,7 @@ export default function CompendiumView() {
   const [selectedSpellId, setSelectedSpellId] = useState<string | null>(null);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [panelMode, setPanelMode] = useState<PanelMode>('view');
+  const [showHomebrew, setShowHomebrew] = useState(false);
 
   // Entidades temporárias para criação/edição
   const [editingSpell, setEditingSpell] = useState<Spell | null>(null);
@@ -1012,6 +1151,14 @@ export default function CompendiumView() {
 
   // --- Renderização do Painel Direito ---
   const renderRightPanel = () => {
+    if (showHomebrew) {
+      return (
+        <HomebrewManager 
+          onClose={() => setShowHomebrew(false)} 
+        />
+      );
+    }
+
     if (activeTab === 'spells') {
       if (panelMode === 'create' || panelMode === 'edit') {
         return editingSpell ? (
@@ -1107,6 +1254,19 @@ export default function CompendiumView() {
                 {tab === 'spells' ? '✨ Magias' : '⚔️ Itens'}
               </button>
             ))}
+            <button
+              onClick={() => { setShowHomebrew(true); setPanelMode('view'); }}
+              className={`
+                py-3 px-3 text-[10px] font-heading tracking-wide uppercase transition-all duration-150
+                ${showHomebrew
+                  ? 'text-gold-primary border-b-2 border-gold-primary bg-codex-surface2'
+                  : 'text-emerald-400 hover:text-emerald-300 border-b-2 border-transparent'
+                }
+              `}
+              title="Configurações de Regras Homebrew"
+            >
+              ⚙️ Homebrew
+            </button>
           </div>
 
           {/* Busca + Botão Novo */}
@@ -1170,7 +1330,14 @@ export default function CompendiumView() {
                       <p className={`text-xs font-medium leading-tight ${isSelected ? 'text-text-primary' : 'text-text-secondary'}`}>
                         {spell.name}
                       </p>
-                      <p className={`text-[10px] mt-0.5 ${SCHOOL_COLORS[spell.school]}`}>
+                      <p 
+                        className={`text-[10px] mt-0.5 ${SCHOOL_COLORS[spell.school as SpellSchool] || ''}`}
+                        style={
+                          !SCHOOL_COLORS[spell.school as SpellSchool] 
+                            ? { color: homebrewSettings.customMagicSchools.find(s => s.name === spell.school)?.color || '#888' } 
+                            : undefined
+                        }
+                      >
                         {levelLabel(spell.level)} · {spell.school}
                       </p>
                     </button>

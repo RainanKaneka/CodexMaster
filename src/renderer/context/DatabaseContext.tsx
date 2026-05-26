@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
-import { CharacterSheet, MapData, Spell, Item, ActiveEncounter, LoreNode, SessionLog, AdventureHook, RollTable } from '../../main/types';
+import { CharacterSheet, MapData, Spell, Item, ActiveEncounter, LoreNode, SessionLog, AdventureHook, RollTable, HomebrewSettings } from '../../main/types';
 
 // =============================================================================
 // DatabaseContext — Estado Global do CodexMaster
@@ -65,6 +65,10 @@ interface DatabaseContextValue {
   saveRollTable: (table: RollTable) => Promise<void>;
   deleteRollTable: (id: string) => Promise<void>;
 
+  // Estado e Ações — Homebrew Settings (Issue #9)
+  homebrewSettings: HomebrewSettings;
+  saveHomebrewSettings: (settings: HomebrewSettings) => Promise<void>;
+
   // Utilitário
   clearError: () => void;
 }
@@ -89,6 +93,7 @@ export function DatabaseProvider({ children }: DatabaseProviderProps) {
   const [sessions, setSessions] = useState<SessionLog[]>([]);
   const [hooks, setHooks] = useState<AdventureHook[]>([]);
   const [rollTables, setRollTables] = useState<RollTable[]>([]);
+  const [homebrewSettings, setHomebrewSettings] = useState<HomebrewSettings>({ customMagicSchools: [], customLevels: [] });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -97,7 +102,7 @@ export function DatabaseProvider({ children }: DatabaseProviderProps) {
     const loadData = async () => {
       try {
         setIsLoading(true);
-        const [loadedSheets, loadedMaps, loadedSpells, loadedItems, loadedEncounter, loadedLore, loadedSessions, loadedHooks, loadedRollTables] = await Promise.all([
+        const [loadedSheets, loadedMaps, loadedSpells, loadedItems, loadedEncounter, loadedLore, loadedSessions, loadedHooks, loadedRollTables, loadedHomebrew] = await Promise.all([
           window.codexAPI.getSheets(),
           window.codexAPI.getMaps(),
           window.codexAPI.getSpells(),
@@ -107,6 +112,7 @@ export function DatabaseProvider({ children }: DatabaseProviderProps) {
           window.codexAPI.getSessions(),
           window.codexAPI.getHooks(),
           window.codexAPI.getRollTables(),
+          window.codexAPI.getHomebrewSettings(),
         ]);
         setSheets([...loadedSheets]);
         setMaps([...loadedMaps]);
@@ -117,6 +123,7 @@ export function DatabaseProvider({ children }: DatabaseProviderProps) {
         setSessions([...loadedSessions]);
         setHooks([...loadedHooks]);
         setRollTables([...loadedRollTables]);
+        setHomebrewSettings(loadedHomebrew);
       } catch (err) {
         setError('Falha ao carregar os dados do banco de dados local.');
         console.error('[DatabaseContext] Erro ao carregar dados:', err);
@@ -378,6 +385,21 @@ export function DatabaseProvider({ children }: DatabaseProviderProps) {
     }
   }, []);
 
+  // --- Ações de Homebrew Settings (Issue #9) ---
+
+  const saveHomebrewSettings = useCallback(async (settings: HomebrewSettings) => {
+    try {
+      const res = await window.codexAPI.saveHomebrewSettings(settings);
+      if (res?.success) {
+        setHomebrewSettings(settings);
+      } else throw new Error('Backend não retornou sucesso.');
+    } catch (err) {
+      setError('Falha ao salvar as configurações Homebrew.');
+      console.error('[DatabaseContext] Erro ao salvar HomebrewSettings:', err);
+      throw err;
+    }
+  }, []);
+
   // --- Ações de Encontro de Combate (Fase 3) ---
 
   /**
@@ -410,6 +432,7 @@ export function DatabaseProvider({ children }: DatabaseProviderProps) {
     sessions,
     hooks,
     rollTables,
+    homebrewSettings,
     isLoading,
     error,
     saveSheet,
@@ -429,6 +452,7 @@ export function DatabaseProvider({ children }: DatabaseProviderProps) {
     deleteHook,
     saveRollTable,
     deleteRollTable,
+    saveHomebrewSettings,
     clearError,
   };
 

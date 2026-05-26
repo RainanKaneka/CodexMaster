@@ -146,6 +146,13 @@ contextBridge.exposeInMainWorld('codexAPI', {
   deleteRollTable: (id: string): Promise<{ success: boolean }> =>
     ipcRenderer.invoke('db:deleteRollTable', id),
 
+  // --- Homebrew Settings (Issue #9) ---
+  getHomebrewSettings: (): Promise<any> =>
+    ipcRenderer.invoke('db:getHomebrewSettings'),
+
+  saveHomebrewSettings: (settings: any): Promise<{ success: boolean }> =>
+    ipcRenderer.invoke('db:saveHomebrewSettings', settings),
+
   // --- Sistema de Mídia Local (Fase 4) ---
   /** Copia um arquivo de mídia para a pasta local `media/` e retorna o caminho relativo */
   copyMediaFile: (srcPath: string, prefix: string): Promise<string | null> =>

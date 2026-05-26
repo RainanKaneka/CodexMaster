@@ -135,19 +135,20 @@ export type SpellSchool =
   | 'Evocação'
   | 'Ilusão'
   | 'Necromancia'
-  | 'Transmutação';
+  | 'Transmutação'
+  | string; // Suporte a customização Homebrew (Issue #9)
 
 /**
  * Estrutura de uma Magia (Spell) de D&D 5e no Compêndio.
- * Nível 0 representa Truques (Cantrips).
+ * Nível 0 representa Truques (Cantrips). Pode conter strings de homebrew (Issue #9).
  *
  * @see fase2.md - Seção 2.1: Magias (Spells)
  */
 export interface Spell {
   id: string;
   name: string;
-  /** Nível da magia: 0 para Truques (Cantrips), 1 a 9 para magias */
-  level: number;
+  /** Nível da magia: 0 para Truques (Cantrips), 1 a 9 para magias, ou string customizada (Homebrew) */
+  level: number | string;
   school: SpellSchool;
   /** Ex: "1 Ação", "1 Ação Bônus", "1 Reação" */
   castingTime: string;
@@ -371,8 +372,18 @@ export interface RollTable {
 }
 
 // =============================================================================
-// BANCO DE DADOS LOCAL
+// BANCO DE DADOS LOCAL E HOMEBREW
 // =============================================================================
+
+/**
+ * Configurações customizadas criadas pelo Mestre (Fase 2 / Issue #9).
+ */
+export interface HomebrewSettings {
+  /** Escolas de magia customizadas com nome e cor de tag */
+  customMagicSchools: { name: string; color: string }[];
+  /** Níveis ou círculos de poder customizados (ex: "Épico", "Deidade") */
+  customLevels: string[];
+}
 
 /**
  * Estrutura raiz do arquivo db.json local.
@@ -398,6 +409,8 @@ export interface LocalDatabase {
   hooks: AdventureHook[];
   /** Tabelas de Rolagem customizadas do Mestre (Fase 6) */
   rollTables: RollTable[];
+  /** Configurações de Homebrew e customizações (Issue #9) */
+  homebrewSettings: HomebrewSettings;
 }
 
 // =============================================================================
@@ -462,6 +475,10 @@ export interface CodexAPI {
   saveLoreNode: (node: LoreNode) => Promise<{ success: boolean }>;
   /** Remove um nó da árvore de Lore pelo ID */
   deleteLoreNode: (id: string) => Promise<{ success: boolean }>;
+
+  // --- Homebrew Settings (Issue #9) ---
+  getHomebrewSettings: () => Promise<HomebrewSettings>;
+  saveHomebrewSettings: (settings: HomebrewSettings) => Promise<{ success: boolean }>;
 
   // --- Sistema de Mídia Local (Fase 4) ---
   /**

@@ -44,6 +44,10 @@ function getEmptyDatabase(): LocalDatabase {
     sessions: [],
     hooks: [],
     rollTables: [],
+    homebrewSettings: {
+      customMagicSchools: [],
+      customLevels: [],
+    },
   };
 }
 
@@ -68,7 +72,7 @@ function readDatabase(): LocalDatabase {
 
     // Garante que campos de Fase 2 existam mesmo em bancos antigos
     // Garante também que os campos de Fase 3 e 4 existam
-    return {
+    const data: LocalDatabase = {
       sheets:          parsed.sheets          ?? [],
       maps:            parsed.maps            ?? [],
       campaignNotes:   parsed.campaignNotes   ?? '',
@@ -79,7 +83,9 @@ function readDatabase(): LocalDatabase {
       sessions:        parsed.sessions        ?? [],
       hooks:           parsed.hooks           ?? [],
       rollTables:      parsed.rollTables      ?? [],
+      homebrewSettings: parsed.homebrewSettings ?? { customMagicSchools: [], customLevels: [] },
     };
+    return data;
   } catch (error) {
     console.error('[CodexMaster] Erro ao ler o banco de dados:', error);
     return getEmptyDatabase();
@@ -470,6 +476,24 @@ ipcMain.handle('db:deleteRollTable', async (_event, id: string) => {
   writeDatabase(db);
   return { success: true };
 });
+
+// ----- HOMEBREW SETTINGS (Issue #9) -----
+
+ipcMain.handle('db:getHomebrewSettings', async () => {
+  const db = readDatabase();
+  return db.homebrewSettings;
+});
+
+ipcMain.handle('db:saveHomebrewSettings', async (_event, settings: any) => {
+  const db = readDatabase();
+  db.homebrewSettings = settings;
+  writeDatabase(db);
+  return { success: true };
+});
+
+// =============================================================================
+// HANDLERS IPC - SISTEMA DE ARQUIVOS (Mídia Local - Fase 4)
+// =============================================================================
 
 /**
  * Copia um arquivo de mídia (imagem) para a pasta local `media/`.
