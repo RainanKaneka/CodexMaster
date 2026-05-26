@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
-import { CharacterSheet, Combatant, ActiveEncounter } from '../../main/types';
+import { CharacterSheet, Combatant, ActiveEncounter, ActiveEffect } from '../../main/types';
 import { useDatabase } from '../context/DatabaseContext';
 import { calculateModifier } from '../utils/dnd5e';
 
@@ -112,6 +112,55 @@ function HpBar({ current, max, compact = false }: HpBarProps) {
 }
 
 // =============================================================================
+// Sub-componente: Badges de Efeitos Ativos
+// =============================================================================
+
+interface EffectBadgesProps {
+  effects: ActiveEffect[];
+  combatantId: string;
+  onRemove: (combatantId: string, effectId: string) => void;
+}
+
+function EffectBadges({ effects, combatantId, onRemove }: EffectBadgesProps) {
+  if (effects.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-1 mt-1">
+      {effects.map((fx) => (
+        <span
+          key={fx.id}
+          title={`${fx.name} — ${fx.duration} rodada${fx.duration !== 1 ? 's' : ''} restante${fx.duration !== 1 ? 's' : ''} · Expira no ${fx.tickOn === 'start' ? 'início' : 'fim'} do turno`}
+          className={`
+            inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-medium border
+            ${fx.isBuff
+              ? 'bg-emerald-950/50 border-emerald-700/50 text-emerald-300'
+              : 'bg-purple-950/50 border-purple-700/50 text-purple-300'
+            }
+          `}
+        >
+          <span>{fx.isBuff ? '✨' : '☠️'}</span>
+          <span className="max-w-[80px] truncate">{fx.name}</span>
+          <span className="font-mono opacity-80">({fx.duration})</span>
+          <span
+            className="opacity-50 text-[8px]"
+            title={fx.tickOn === 'start' ? 'Expira no início do turno' : 'Expira no fim do turno'}
+          >
+            {fx.tickOn === 'start' ? '▶' : '◀'}
+          </span>
+          <button
+            id={`effect-remove-${combatantId}-${fx.id}`}
+            onClick={() => onRemove(combatantId, fx.id)}
+            className="ml-0.5 opacity-60 hover:opacity-100 transition-opacity"
+            title="Remover efeito"
+          >
+            ×
+          </button>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// =============================================================================
 // Sub-componente: Painel do Participante no Modo de Combate
 // =============================================================================
 
@@ -123,12 +172,20 @@ interface CombatantRowProps {
   onSetTempHp: (id: string, value: number) => void;
   onRemove: (id: string) => void;
   onDeathSaveChange: (id: string, type: 'successes' | 'failures', value: number) => void;
+  onAddEffect: (id: string, effect: Omit<ActiveEffect, 'id'>) => void;
+  onRemoveEffect: (combatantId: string, effectId: string) => void;
 }
 
-function CombatantRow({ combatant, isActive, onHpChange, onSetHp, onSetTempHp, onRemove, onDeathSaveChange }: CombatantRowProps) {
+function CombatantRow({ combatant, isActive, onHpChange, onSetHp, onSetTempHp, onRemove, onDeathSaveChange, onAddEffect, onRemoveEffect }: CombatantRowProps) {
   const [deltaInput, setDeltaInput] = useState('');
-  const [hpInput, setHpInput] = useState<string | null>(null); // null = não editando diretamente
-  const [tempHpInput, setTempHpInput] = useState(''); // input para PV temp
+  const [hpInput, setHpInput] = useState<string | null>(null);
+  const [tempHpInput, setTempHpInput] = useState('');
+  // Estado do formulário inline de adicionar efeito
+  const [showEffectForm, setShowEffectForm] = useState(false);
+  const [effectName, setEffectName] = useState('');
+  const [effectDuration, setEffectDuration] = useState('1');
+  const [effectIsBuff, setEffectIsBuff] = useState(true);
+  const [effectTickOn, setEffectTickOn] = useState<'start' | 'end'>('end');
 
   const hasTempHp = (combatant.tempHp ?? 0) > 0;
 
@@ -186,6 +243,20 @@ function CombatantRow({ combatant, isActive, onHpChange, onSetHp, onSetTempHp, o
       setHpInput(null);
     }
   };
+
+  const handleAddEffectSubmit = () => {
+    const trimmed = effectName.trim();
+    const dur = parseInt(effectDuration, 10);
+    if (!trimmed || isNaN(dur) || dur < 1) return;
+    onAddEffect(combatant.id, { name: trimmed, duration: dur, isBuff: effectIsBuff, tickOn: effectTickOn });
+    setEffectName('');
+    setEffectDuration('1');
+    setEffectIsBuff(true);
+    setEffectTickOn('end');
+    setShowEffectForm(false);
+  };
+
+  const activeEffects = combatant.effects ?? [];
 
   return (
     <div
@@ -319,6 +390,15 @@ function CombatantRow({ combatant, isActive, onHpChange, onSetHp, onSetTempHp, o
       {/* Barra de PV */}
       <HpBar current={combatant.hpCurrent} max={combatant.hpMax} />
 
+      {/* Linha 1.5: Efeitos Ativos */}
+      {activeEffects.length > 0 && (
+        <EffectBadges
+          effects={activeEffects}
+          combatantId={combatant.id}
+          onRemove={onRemoveEffect}
+        />
+      )}
+
       {/* Linha 2: Controles de dano/cura */}
       <div className="flex items-center gap-2">
         <input
@@ -451,6 +531,127 @@ function CombatantRow({ combatant, isActive, onHpChange, onSetHp, onSetTempHp, o
               })}
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* Linha 4: Adicionar Efeito */}
+      <div className="flex items-center gap-2 mt-1 pt-2 border-t border-codex-border/40">
+        <button
+          id={`combatant-add-effect-btn-${combatant.id}`}
+          onClick={() => setShowEffectForm((v) => !v)}
+          className={`text-[10px] flex items-center gap-1 px-2 py-0.5 rounded border transition-all duration-150 ${
+            showEffectForm
+              ? 'bg-indigo-950/60 border-indigo-600/60 text-indigo-300'
+              : 'border-codex-border text-text-muted hover:border-indigo-700/60 hover:text-indigo-400'
+          }`}
+          title="Adicionar efeito temporário"
+        >
+          ✨ Efeito
+        </button>
+        {activeEffects.length === 0 && !showEffectForm && (
+          <span className="text-[9px] text-text-muted italic">Sem efeitos ativos</span>
+        )}
+      </div>
+
+      {/* Formulário inline de Adicionar Efeito */}
+      {showEffectForm && (
+        <div className="flex flex-col gap-1.5 p-2.5 rounded-lg bg-indigo-950/30 border border-indigo-800/40">
+          <p className="text-[9px] text-indigo-300 uppercase tracking-widest font-heading">Novo Efeito</p>
+          <div className="flex items-center gap-2">
+            <input
+              id={`effect-name-${combatant.id}`}
+              type="text"
+              value={effectName}
+              onChange={(e) => setEffectName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAddEffectSubmit()}
+              placeholder="Nome (ex: Bênção)"
+              className="input-medieval flex-1 text-xs py-0.5 placeholder:text-indigo-900"
+              autoFocus
+            />
+            <input
+              id={`effect-duration-${combatant.id}`}
+              type="number"
+              value={effectDuration}
+              onChange={(e) => setEffectDuration(e.target.value)}
+              min={1}
+              placeholder="Rod."
+              className="input-medieval w-14 text-xs py-0.5 text-center"
+              title="Duração em rodadas"
+            />
+          </div>
+          <div className="flex items-center gap-3">
+            {/* Toggle Buff / Debuff */}
+            <div className="flex items-center gap-1">
+              <button
+                id={`effect-type-buff-${combatant.id}`}
+                onClick={() => setEffectIsBuff(true)}
+                className={`text-[10px] px-2 py-0.5 rounded-full border transition-all duration-100 ${
+                  effectIsBuff
+                    ? 'bg-emerald-900/60 border-emerald-600 text-emerald-300'
+                    : 'border-codex-border text-text-muted hover:border-emerald-700'
+                }`}
+              >
+                ✨ Buff
+              </button>
+              <button
+                id={`effect-type-debuff-${combatant.id}`}
+                onClick={() => setEffectIsBuff(false)}
+                className={`text-[10px] px-2 py-0.5 rounded-full border transition-all duration-100 ${
+                  !effectIsBuff
+                    ? 'bg-purple-900/60 border-purple-600 text-purple-300'
+                    : 'border-codex-border text-text-muted hover:border-purple-700'
+                }`}
+              >
+                ☠️ Debuff
+              </button>
+            </div>
+
+            {/* Toggle Início / Fim do Turno */}
+            <div className="flex items-center gap-1" title="Quando a duração é decrementada">
+              <span className="text-[9px] text-text-muted shrink-0">Expira:</span>
+              <button
+                id={`effect-tick-start-${combatant.id}`}
+                onClick={() => setEffectTickOn('start')}
+                className={`text-[10px] px-2 py-0.5 rounded-full border transition-all duration-100 ${
+                  effectTickOn === 'start'
+                    ? 'bg-sky-900/60 border-sky-600 text-sky-300'
+                    : 'border-codex-border text-text-muted hover:border-sky-700'
+                }`}
+                title="Decrementa no início do turno do portador"
+              >
+                ▶ Início
+              </button>
+              <button
+                id={`effect-tick-end-${combatant.id}`}
+                onClick={() => setEffectTickOn('end')}
+                className={`text-[10px] px-2 py-0.5 rounded-full border transition-all duration-100 ${
+                  effectTickOn === 'end'
+                    ? 'bg-sky-900/60 border-sky-600 text-sky-300'
+                    : 'border-codex-border text-text-muted hover:border-sky-700'
+                }`}
+                title="Decrementa no fim do turno do portador (padrão)"
+              >
+                ◀ Fim
+              </button>
+            </div>
+
+            <div className="flex-1" />
+            <button
+              id={`effect-cancel-${combatant.id}`}
+              onClick={() => { setShowEffectForm(false); setEffectName(''); setEffectDuration('1'); setEffectTickOn('end'); }}
+              className="text-[10px] text-text-muted hover:text-crimson-bright transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              id={`effect-confirm-${combatant.id}`}
+              onClick={handleAddEffectSubmit}
+              disabled={!effectName.trim() || parseInt(effectDuration, 10) < 1 || isNaN(parseInt(effectDuration, 10))}
+              className="text-[10px] px-2.5 py-0.5 rounded bg-indigo-700/60 border border-indigo-500/60 text-indigo-200 hover:bg-indigo-600/60 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              Aplicar
+            </button>
           </div>
         </div>
       )}
@@ -678,11 +879,48 @@ export default function CombatTrackerView() {
     const nextIndex = (turnIndex + 1) % combatants.length;
     const isNewRound = nextIndex === 0;
 
+    /**
+     * Issue #12 (refinamento): Duas fases de tick conforme D&D 5e.
+     *
+     * Fase 1 — SAINDO DO TURNO (tickOn === 'end'):
+     *   O personagem com turnIndex atual terminou seu turno.
+     *   Decrementa e expurga os efeitos com tickOn === 'end' DELE.
+     *
+     * Fase 2 — ENTRANDO NO TURNO (tickOn === 'start'):
+     *   O personagem com nextIndex está começando seu turno.
+     *   Decrementa e expurga os efeitos com tickOn === 'start' DELE.
+     *
+     * Nota: Se turnIndex === nextIndex (1 único combatente), ambas as fases
+     * incidem sobre o mesmo personagem, o que é o comportamento correto.
+     */
+    const tickEffects = (
+      effects: ActiveEffect[],
+      phase: 'start' | 'end'
+    ): ActiveEffect[] =>
+      effects
+        .map((fx) => fx.tickOn === phase ? { ...fx, duration: fx.duration - 1 } : fx)
+        .filter((fx) => fx.duration > 0);
+
+    // Aplica as duas fases construindo um novo array de combatentes
+    const updatedCombatants: Combatant[] = combatants.map((c, i) => {
+      let effects = c.effects ?? [];
+
+      // Fase 1: personagem saindo do turno (tickOn === 'end')
+      if (i === turnIndex) {
+        effects = tickEffects(effects, 'end');
+      }
+
+      // Fase 2: personagem entrando no turno (tickOn === 'start')
+      // Pode ser o mesmo que o turnIndex se houver 1 único combatente
+      if (i === nextIndex) {
+        effects = tickEffects(effects, 'start');
+      }
+
+      return { ...c, isActiveTurn: i === nextIndex, effects };
+    });
+
     const updated: ActiveEncounter = {
-      combatants: combatants.map((c, i) => ({
-        ...c,
-        isActiveTurn: i === nextIndex,
-      })),
+      combatants: updatedCombatants,
       round: isNewRound ? round + 1 : round,
       turnIndex: nextIndex,
     };
@@ -825,6 +1063,48 @@ export default function CombatTrackerView() {
       // Erro já tratado no contexto
     }
   };
+
+  // =============================================================================
+  // Handlers de Efeitos (Issue #12)
+  // =============================================================================
+
+  /**
+   * Adiciona um efeito temporário a um combatente.
+   * Gera um ID único para o efeito e persiste o encontro.
+   */
+  const handleAddEffect = useCallback(async (
+    combatantId: string,
+    effectData: Omit<ActiveEffect, 'id'>
+  ) => {
+    if (!encounter) return;
+    const newEffect: ActiveEffect = {
+      id: typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `fx-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      ...effectData,
+    };
+    const updated: ActiveEncounter = {
+      ...encounter,
+      combatants: encounter.combatants.map((c) =>
+        c.id !== combatantId ? c : { ...c, effects: [...(c.effects ?? []), newEffect] }
+      ),
+    };
+    await persistEncounter(updated);
+  }, [encounter, persistEncounter]);
+
+  /**
+   * Remove um efeito temporário específico de um combatente pelo ID.
+   */
+  const handleRemoveEffect = useCallback(async (combatantId: string, effectId: string) => {
+    if (!encounter) return;
+    const updated: ActiveEncounter = {
+      ...encounter,
+      combatants: encounter.combatants.map((c) =>
+        c.id !== combatantId ? c : { ...c, effects: (c.effects ?? []).filter((fx) => fx.id !== effectId) }
+      ),
+    };
+    await persistEncounter(updated);
+  }, [encounter, persistEncounter]);
 
   // =============================================================================
   // Handlers de Mid-Combat Insertion / Removal
@@ -1368,6 +1648,8 @@ export default function CombatTrackerView() {
               onSetTempHp={handleSetTempHp}
               onRemove={handleRemoveCombatant}
               onDeathSaveChange={handleDeathSaveChange}
+              onAddEffect={handleAddEffect}
+              onRemoveEffect={handleRemoveEffect}
             />
           ))}
         </div>

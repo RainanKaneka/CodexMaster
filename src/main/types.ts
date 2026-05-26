@@ -238,6 +238,29 @@ export interface Item {
 // =============================================================================
 
 /**
+ * Efeito temporário ativo em um combatente (Issue #12).
+ * Reduzido em 1 rodada automaticamente a cada turno do portador.
+ * Removido automaticamente quando duration chega a 0.
+ */
+export interface ActiveEffect {
+  /** ID único do efeito nesta instância */
+  id: string;
+  /** Nome do efeito (ex: "Bênção", "Envenenado", "Concentração") */
+  name: string;
+  /** Duração restante em rodadas (>= 1) */
+  duration: number;
+  /** true = Buff (verde/azul), false = Debuff/Condição (vermelho/roxo) */
+  isBuff: boolean;
+  /**
+   * Momento do turno em que a duração é decrementada (D&D 5e):
+   * - 'start' → Expira no início do turno do portador (ex: Bênção, Inspiração)
+   * - 'end'   → Expira no fim do turno do portador (ex: Envenenado, Atordoado)
+   * Padrão recomendado: 'end'
+   */
+  tickOn: 'start' | 'end';
+}
+
+/**
  * Representa um participante ativo em um combate.
  * É uma instância derivada de uma CharacterSheet, isolada para não modificar
  * os dados originais das fichas durante o combate.
@@ -282,6 +305,12 @@ export interface Combatant {
    * Absorvem dano antes do PV real. Não se acumulam (último valor sobrescreve).
    */
   tempHp?: number;
+  /**
+   * Efeitos temporais ativos neste combatente (Issue #12).
+   * Cada efeito tem nome, duração em rodadas e tipo (buff/debuff).
+   * A duração é decrementada automaticamente a cada início de turno do portador.
+   */
+  effects?: ActiveEffect[];
 }
 
 /**
