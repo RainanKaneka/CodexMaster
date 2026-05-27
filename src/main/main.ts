@@ -121,8 +121,13 @@ function createWindow(): void {
     title: 'CodexMaster — Painel do Mestre',
     backgroundColor: '#1a1a1a',
     icon: path.join(__dirname, '../assets/icon.ico'),
-    // Barra de título nativa temporariamente. Pode ser customizada no futuro.
-    titleBarStyle: 'default',
+    // Frameless com overlay nativo dos botões de controle (Obsidian-style)
+    titleBarStyle: 'hidden',
+    titleBarOverlay: {
+      color: '#1a1a1a',          // mesmo backgroundColor da janela
+      symbolColor: '#a0a0a0',   // cor dos ícones − □ ×
+      height: 36,               // altura da hit-area dos botões de controle
+    },
     webPreferences: {
       // Segurança IPC: preload.ts é a única ponte entre main e renderer
       preload: path.join(__dirname, 'preload.js'),
@@ -131,6 +136,9 @@ function createWindow(): void {
       sandbox: false,           // Necessário para o preload funcionar
     },
   });
+
+  // Remove o menu nativo (File, Edit, View...) — app usa navegação própria
+  mainWindow.setMenu(null);
 
   if (isDev) {
     // Em desenvolvimento, carrega o servidor Vite local

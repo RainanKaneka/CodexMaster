@@ -51,18 +51,34 @@ function AppContent() {
   return (
     <div
       id="app-root"
-      className="flex h-screen w-screen overflow-hidden bg-codex-bg text-text-primary"
+      className="flex flex-col h-screen w-screen overflow-hidden bg-codex-bg text-text-primary"
     >
-      {/* Barra Lateral de Navegação */}
-      <Sidebar activeView={activeView} onNavigate={setActiveView} />
-
-      {/* Área de Conteúdo Principal */}
-      <main
-        id="app-main-content"
-        className="flex-1 h-full overflow-hidden"
+      {/* ===== Barra de título customizada (Frameless Window) ===== */}
+      {/* [-webkit-app-region:drag] permite arrastar a janela por esta área */}
+      <div
+        id="app-titlebar"
+        className="shrink-0 h-9 w-full flex items-center px-4 bg-codex-bg border-b border-codex-border/30 select-none"
+        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       >
-        {renderView()}
-      </main>
+        {/* Logo / nome — puramente decorativo */}
+        <span className="text-[11px] font-heading text-gold-dim/60 tracking-widest uppercase pointer-events-none">
+          ⚔ CodexMaster
+        </span>
+      </div>
+
+      {/* ===== Layout principal: Sidebar + Conteúdo ===== */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Barra Lateral de Navegação */}
+        <Sidebar activeView={activeView} onNavigate={setActiveView} />
+
+        {/* Área de Conteúdo Principal */}
+        <main
+          id="app-main-content"
+          className="flex-1 h-full overflow-hidden"
+        >
+          {renderView()}
+        </main>
+      </div>
     </div>
   );
 }
