@@ -1,7 +1,7 @@
 {
   "name": "codex-master",
   "productName": "CodexMaster",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "O compêndio definitivo para Mestres de RPG.",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -22,9 +22,11 @@
   "author": "Rainan de Oliveira Reis",
   "license": "MIT",
   "dependencies": {
+    "electron-updater": "^6.8.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-image-crop": "^11.0.10"
+    "react-image-crop": "^11.0.10",
+    "react-markdown": "^10.1.0"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
@@ -64,6 +66,11 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "SEU_USUARIO_GITHUB",
+      "repo": "SEU_REPOSITORIO"
     }
   }
 }

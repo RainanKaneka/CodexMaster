@@ -173,4 +173,9 @@ contextBridge.exposeInMainWorld('codexAPI', {
   /** Salva imagem recortada em base64 como arquivo local */
   saveCroppedImage: (base64Data: string, prefix: string): Promise<string | null> =>
     ipcRenderer.invoke('media:saveCroppedImage', base64Data, prefix),
+
+  // --- Versão do App (Issue #15) ---
+  /** Retorna a versão atual do app lida pelo processo principal via app.getVersion() */
+  getAppVersion: (): Promise<string> =>
+    ipcRenderer.invoke('app:getVersion'),
 });

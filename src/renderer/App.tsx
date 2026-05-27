@@ -10,6 +10,7 @@ import LoreEncyclopediaView from './views/LoreEncyclopediaView';
 import CampaignDiaryView from './views/CampaignDiaryView';
 import GeneratorsView from './views/GeneratorsView';
 import SettingsView from './views/SettingsView';
+import ReleaseNotesModal, { useReleaseNotes } from './components/ReleaseNotesModal';
 
 // =============================================================================
 // App.tsx — Componente Raiz do CodexMaster
@@ -20,6 +21,9 @@ import SettingsView from './views/SettingsView';
 
 function AppContent() {
   const [activeView, setActiveView] = useState<ActiveView>('sheets');
+
+  // Issue #15 — Release Notes Modal
+  const { showModal, currentVersion, handleClose } = useReleaseNotes();
 
   const renderView = () => {
     switch (activeView) {
@@ -79,6 +83,10 @@ function AppContent() {
           {renderView()}
         </main>
       </div>
+      {/* ===== Modal de Release Notes (Issue #15) ===== */}
+      {showModal && (
+        <ReleaseNotesModal currentVersion={currentVersion} onClose={handleClose} />
+      )}
     </div>
   );
 }

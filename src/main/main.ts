@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain, dialog, protocol, net } from 'electron';
+import { autoUpdater } from 'electron-updater';
 import path from 'path';
 import fs from 'fs';
 import { LocalDatabase, CharacterSheet, MapData, Spell, Item, ActiveEncounter, LoreNode, SessionLog, AdventureHook, RollTable } from './types';
@@ -140,6 +141,23 @@ function createWindow(): void {
   // Remove o menu nativo (File, Edit, View...) — app usa navegação própria
   mainWindow.setMenu(null);
 
+  // =============================================================================
+  // Auto-Updater (Issue #15)
+  // Verifica atualizações silenciosamente após a janela carregar.
+  // Em dev (isDev) o electron-updater é no-op: sem GitHub token não checa.
+  // =============================================================================
+  mainWindow.webContents.once('did-finish-load', () => {
+    if (!isDev) {
+      // Log de erros do updater sem crashar o app
+      autoUpdater.on('error', (err) => {
+        console.error('[AutoUpdater] Erro:', err?.message ?? err);
+      });
+      autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+        console.error('[AutoUpdater] checkForUpdatesAndNotify falhou:', err?.message ?? err);
+      });
+    }
+  });
+
   if (isDev) {
     // Em desenvolvimento, carrega o servidor Vite local
     mainWindow.loadURL('http://localhost:5173');
@@ -158,6 +176,11 @@ function createWindow(): void {
 // IPC HANDLERS — Canais de comunicação seguros com o renderer
 // Regra direcao.md: Expor apenas funções de canal explícitas e envelopadas.
 // =============================================================================
+
+// ----- VERSÃO DO APP (Issue #15) -----
+
+/** Retorna a versão atual do app (lida do package.json pelo Electron) */
+ipcMain.handle('app:getVersion', () => app.getVersion());
 
 // ----- FICHAS (CharacterSheets) -----
 
