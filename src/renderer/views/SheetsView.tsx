@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { CharacterSheet, Attributes } from '../../main/types';
+import { useState, useEffect, useMemo } from 'react';
+import { CharacterSheet, Attributes, LoreNode } from '../../main/types';
 import { useDatabase } from '../context/DatabaseContext';
 import {
   calculateModifier,
@@ -438,9 +438,11 @@ interface SheetFormProps {
   onSave: (sheet: CharacterSheet) => void;
   onCancel: () => void;
   onAutoSave?: (sheet: CharacterSheet) => void;
+  /** Árvore de Lore para calcular backlinks dinâmicos (Issue #14). */
+  loreTree?: LoreNode[];
 }
 
-function SheetForm({ sheet: initialSheet, onSave, onCancel, onAutoSave }: SheetFormProps) {
+function SheetForm({ sheet: initialSheet, onSave, onCancel, onAutoSave, loreTree = [] }: SheetFormProps) {
   const [sheet, setSheet] = useState<CharacterSheet>(initialSheet);
 
   const [hpCurrentInput, setHpCurrentInput] = useState<string>(String(sheet.hpCurrent));
@@ -804,7 +806,66 @@ function SheetForm({ sheet: initialSheet, onSave, onCancel, onAutoSave }: SheetF
             }
           }}
         />
+
+        {/* Backlinks de Lore — Issue #14 */}
+        <LoreBacklinksSection sheetId={sheet.id} loreTree={loreTree} />
       </div>
+    </div>
+  );
+}
+
+// ---- Sub-componente: Backlinks de Lore (Issue #14) ----
+
+interface LoreBacklinksSectionProps {
+  sheetId: string;
+  loreTree: LoreNode[];
+}
+
+function LoreBacklinksSection({ sheetId, loreTree }: LoreBacklinksSectionProps) {
+  const mentions = useMemo(() =>
+    loreTree.filter(
+      (n) => n.type === 'file' && (n.content ?? '').includes(`[[ficha:${sheetId}|`)
+    ),
+    [sheetId, loreTree]
+  );
+
+  const handleNavigateToNote = (nodeId: string) => {
+    // Grava antes do dispatch para sobreviver à remontagem da LoreEncyclopediaView
+    localStorage.setItem('codex-lore-target', nodeId);
+    window.dispatchEvent(
+      new CustomEvent('codex-navigate', { detail: { view: 'lore', targetId: nodeId } })
+    );
+  };
+
+  return (
+    <div className="border-t border-codex-border/40 pt-3 mt-2">
+      <p className="text-[10px] text-text-muted uppercase tracking-widest mb-2 flex items-center gap-1.5">
+        <span>📖</span> Mencionado em (Lore)
+      </p>
+      {mentions.length === 0 ? (
+        <p className="text-xs text-text-muted italic">
+          Esta ficha ainda não foi mencionada em nenhuma nota.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-1">
+          {mentions.map((node) => (
+            <button
+              key={node.id}
+              id={`backlink-${node.id}`}
+              onClick={() => handleNavigateToNote(node.id)}
+              className="flex items-center gap-2 text-left text-xs px-2.5 py-1.5 rounded hover:bg-codex-surface2 transition-colors group"
+            >
+              <span className="text-sm shrink-0">📄</span>
+              <span className="flex-1 text-amber-300/80 group-hover:text-amber-200 transition-colors truncate">
+                {node.title}
+              </span>
+              <span className="text-[9px] text-text-muted shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                Abrir →
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -919,7 +980,7 @@ function SheetCard({ sheet, isSelected, onSelect, onDelete }: SheetCardProps) {
 // ---- View Principal ----
 
 export default function SheetsView() {
-  const { sheets, saveSheet, deleteSheet } = useDatabase();
+  const { sheets, saveSheet, deleteSheet, loreTree } = useDatabase();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editingSheet, setEditingSheet] = useState<CharacterSheet | null>(null);
   const [filterType, setFilterType] = useState<'all' | 'player' | 'creature'>('all');
@@ -930,12 +991,12 @@ export default function SheetsView() {
     setSelectedId(null);
   };
 
-  // Escutar eventos de navegação externa (ex: Módulo de Mapas pedindo para abrir uma ficha)
+  // Escutar eventos de navegação externa (ex: Módulo de Mapas, QuickView de Lore)
   useEffect(() => {
-    // 1. Consumir payload pendente caso o componente tenha acabado de ser montado pela navegação
-    const pendingTargetId = localStorage.getItem('codex-nav-target');
-    if (pendingTargetId) {
-      const targetSheet = sheets.find(s => s.id === pendingTargetId);
+    // 1a. Payload do MapsView (chave legada)
+    const pendingNavTarget = localStorage.getItem('codex-nav-target');
+    if (pendingNavTarget) {
+      const targetSheet = sheets.find(s => s.id === pendingNavTarget);
       if (targetSheet) {
         setSelectedId(targetSheet.id);
         setEditingSheet({ ...targetSheet });
@@ -943,7 +1004,19 @@ export default function SheetsView() {
       localStorage.removeItem('codex-nav-target');
     }
 
-    // 2. Manter listener para caso a view já estivesse montada em possíveis cenários paralelos futuros
+    // 1b. Payload do SheetFloatingPanel / QuickView (Issue #14)
+    // Gravado ANTES do dispatchEvent para sobreviver à remontagem do componente
+    const pendingSheetTarget = localStorage.getItem('codex-sheet-target');
+    if (pendingSheetTarget) {
+      const targetSheet = sheets.find(s => s.id === pendingSheetTarget);
+      if (targetSheet) {
+        setSelectedId(targetSheet.id);
+        setEditingSheet({ ...targetSheet });
+      }
+      localStorage.removeItem('codex-sheet-target');
+    }
+
+    // 2. Listener para quando a view já está montada (navegação interna sem remontagem)
     const handleNavigate = (e: Event) => {
       const customEvent = e as CustomEvent<{ view: string; targetId?: string }>;
       if (customEvent.detail?.view === 'sheets' && customEvent.detail?.targetId) {
@@ -1089,6 +1162,7 @@ export default function SheetsView() {
             onSave={handleSaveSheet}
             onCancel={() => setEditingSheet(null)}
             onAutoSave={saveSheet}
+            loreTree={loreTree}
           />
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-center px-8">

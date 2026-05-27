@@ -38,21 +38,26 @@ function genId(): string {
 // =============================================================================
 
 type InlineSegment =
-  | { kind: 'text';     content: string }
-  | { kind: 'bold';     content: string }
-  | { kind: 'italic';   content: string }
-  | { kind: 'code';     content: string }
-  | { kind: 'wikilink'; target: string }
-  | { kind: 'link';     label: string; url: string };
+  | { kind: 'text';       content: string }
+  | { kind: 'bold';       content: string }
+  | { kind: 'italic';     content: string }
+  | { kind: 'code';       content: string }
+  | { kind: 'wikilink';   target: string }
+  | { kind: 'link';       label: string; url: string }
+  | { kind: 'sheetlink';  sheetId: string; label: string };
 
 /**
- * Parseia uma linha de texto em segmentos inline (bold, italic, code, wikilink).
- * Processa as marcações na ordem: wikilinks > code > bold > italic > texto puro.
+ * Parseia uma linha de texto em segmentos inline (bold, italic, code, wikilink, sheetlink).
+ * Processa as marcações na ordem:
+ *   1. [[ficha:ID|Label]] — link de ficha (Issue #14)
+ *   2. [[Wikilink]] — link interno de nota
+ *   3. [link](url) — link externo
+ *   4. `code`, **bold**, *italic*
  */
 function parseInline(text: string): InlineSegment[] {
   const segments: InlineSegment[] = [];
-  // Regex unificado para capturar todos os tokens inline em ordem de prioridade
-  const tokenRegex = /\[\[([^\]]+)\]\]|\[([^\]]+)\]\(([^)]+)\)|`([^`]+)`|\*\*([^*]+)\*\*|\*([^*]+)\*|_([^_]+)_/g;
+  // [[ficha:ID|Label]] DEVE vir antes do wikilink genérico [[...]]
+  const tokenRegex = /\[\[ficha:([^\]|]+)\|([^\]]+)\]\]|\[\[([^\]]+)\]\]|\[([^\]]+)\]\(([^)]+)\)|`([^`]+)`|\*\*([^*]+)\*\*|\*([^*]+)\*|_([^_]+)_/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
@@ -62,21 +67,24 @@ function parseInline(text: string): InlineSegment[] {
       segments.push({ kind: 'text', content: text.slice(lastIndex, match.index) });
     }
 
-    if (match[1] !== undefined) {
+    if (match[1] !== undefined && match[2] !== undefined) {
+      // [[ficha:ID|Label]] — link de ficha
+      segments.push({ kind: 'sheetlink', sheetId: match[1].trim(), label: match[2].trim() });
+    } else if (match[3] !== undefined) {
       // [[Wikilink]]
-      segments.push({ kind: 'wikilink', target: match[1].trim() });
-    } else if (match[2] !== undefined && match[3] !== undefined) {
+      segments.push({ kind: 'wikilink', target: match[3].trim() });
+    } else if (match[4] !== undefined && match[5] !== undefined) {
       // [Link](url)
-      segments.push({ kind: 'link', label: match[2], url: match[3] });
-    } else if (match[4] !== undefined) {
+      segments.push({ kind: 'link', label: match[4], url: match[5] });
+    } else if (match[6] !== undefined) {
       // `code`
-      segments.push({ kind: 'code', content: match[4] });
-    } else if (match[5] !== undefined) {
+      segments.push({ kind: 'code', content: match[6] });
+    } else if (match[7] !== undefined) {
       // **bold**
-      segments.push({ kind: 'bold', content: match[5] });
-    } else if (match[6] !== undefined || match[7] !== undefined) {
+      segments.push({ kind: 'bold', content: match[7] });
+    } else if (match[8] !== undefined || match[9] !== undefined) {
       // *italic* ou _italic_
-      segments.push({ kind: 'italic', content: match[6] ?? match[7] });
+      segments.push({ kind: 'italic', content: match[8] ?? match[9] });
     }
 
     lastIndex = tokenRegex.lastIndex;
@@ -93,9 +101,10 @@ function parseInline(text: string): InlineSegment[] {
 interface InlineRendererProps {
   text: string;
   onWikilink: (target: string) => void;
+  onSheetLink: (sheetId: string) => void;
 }
 
-function InlineRenderer({ text, onWikilink }: InlineRendererProps) {
+function InlineRenderer({ text, onWikilink, onSheetLink }: InlineRendererProps) {
   const segments = parseInline(text);
   return (
     <>
@@ -114,6 +123,17 @@ function InlineRenderer({ text, onWikilink }: InlineRendererProps) {
               title={`Abrir: ${seg.target}`}
             >
               {seg.target}
+            </button>
+          );
+          case 'sheetlink': return (
+            <button
+              key={i}
+              onClick={() => onSheetLink(seg.sheetId)}
+              className="inline-flex items-center gap-0.5 text-amber-300 underline underline-offset-2 hover:text-amber-200 transition-colors font-medium"
+              title={`Ver ficha: ${seg.label}`}
+            >
+              <span className="text-[10px] opacity-60">&#x1f9fe;</span>
+              {seg.label}
             </button>
           );
         }
@@ -248,9 +268,10 @@ function parseMarkdownBlocks(markdown: string): MarkdownBlock[] {
 interface MarkdownRendererProps {
   content: string;
   onWikilink: (target: string) => void;
+  onSheetLink: (sheetId: string) => void;
 }
 
-function MarkdownRenderer({ content, onWikilink }: MarkdownRendererProps) {
+function MarkdownRenderer({ content, onWikilink, onSheetLink }: MarkdownRendererProps) {
   const blocks = useMemo(() => parseMarkdownBlocks(content), [content]);
 
   const headingClass = (level: number) => {
@@ -276,21 +297,21 @@ function MarkdownRenderer({ content, onWikilink }: MarkdownRendererProps) {
           case 'heading':
             return (
               <div key={i} className={headingClass(block.level)}>
-                <InlineRenderer text={block.text} onWikilink={onWikilink} />
+                <InlineRenderer text={block.text} onWikilink={onWikilink} onSheetLink={onSheetLink} />
               </div>
             );
 
           case 'paragraph':
             return (
               <p key={i} className="text-sm leading-relaxed mb-2">
-                <InlineRenderer text={block.text} onWikilink={onWikilink} />
+                <InlineRenderer text={block.text} onWikilink={onWikilink} onSheetLink={onSheetLink} />
               </p>
             );
 
           case 'blockquote':
             return (
               <blockquote key={i} className="border-l-2 border-gold-dim pl-4 italic text-text-muted text-sm my-3">
-                <InlineRenderer text={block.text} onWikilink={onWikilink} />
+                <InlineRenderer text={block.text} onWikilink={onWikilink} onSheetLink={onSheetLink} />
               </blockquote>
             );
 
@@ -314,7 +335,7 @@ function MarkdownRenderer({ content, onWikilink }: MarkdownRendererProps) {
                 {block.items.map((item, j) => (
                   <li key={j} className="flex items-start gap-2 text-sm">
                     <span className="text-gold-dim mt-1 shrink-0">◆</span>
-                    <InlineRenderer text={item} onWikilink={onWikilink} />
+                    <InlineRenderer text={item} onWikilink={onWikilink} onSheetLink={onSheetLink} />
                   </li>
                 ))}
               </ul>
@@ -326,7 +347,7 @@ function MarkdownRenderer({ content, onWikilink }: MarkdownRendererProps) {
                 {block.items.map((item, j) => (
                   <li key={j} className="flex items-start gap-2 text-sm">
                     <span className="text-gold-primary font-mono text-xs mt-0.5 shrink-0 w-5 text-right">{j + 1}.</span>
-                    <InlineRenderer text={item} onWikilink={onWikilink} />
+                    <InlineRenderer text={item} onWikilink={onWikilink} onSheetLink={onSheetLink} />
                   </li>
                 ))}
               </ol>
@@ -503,6 +524,154 @@ function LoreTreeNode({
 }
 
 // =============================================================================
+// Componente: Dropdown de Autocomplete por @ (Issue #14)
+// =============================================================================
+
+interface AtMentionDropdownProps {
+  sheets: CharacterSheet[];
+  query: string;
+  position: { top: number; left: number };
+  onSelect: (sheet: CharacterSheet) => void;
+  onClose: () => void;
+}
+
+function AtMentionDropdown({ sheets, query, position, onSelect, onClose }: AtMentionDropdownProps) {
+  const [activeIdx, setActiveIdx] = useState(0);
+  const filtered = useMemo(() =>
+    sheets.filter((s) => s.name.toLowerCase().includes(query.toLowerCase())).slice(0, 8),
+    [sheets, query]
+  );
+
+  // Navegação por teclado via evento global
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { onClose(); return; }
+      if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIdx((i) => Math.min(i + 1, filtered.length - 1)); }
+      if (e.key === 'ArrowUp')   { e.preventDefault(); setActiveIdx((i) => Math.max(i - 1, 0)); }
+      if (e.key === 'Enter' && filtered[activeIdx]) { e.preventDefault(); onSelect(filtered[activeIdx]); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [filtered, activeIdx, onSelect, onClose]);
+
+  // Clique fora fecha
+  useEffect(() => {
+    const onMousedown = (e: MouseEvent) => {
+      const el = document.getElementById('at-mention-dropdown');
+      if (el && !el.contains(e.target as Node)) onClose();
+    };
+    document.addEventListener('mousedown', onMousedown);
+    return () => document.removeEventListener('mousedown', onMousedown);
+  }, [onClose]);
+
+  if (filtered.length === 0) return null;
+
+  return (
+    <div
+      id="at-mention-dropdown"
+      className="fixed z-[200] bg-codex-surface border border-gold-dim rounded-lg shadow-gold-glow overflow-hidden w-60"
+      style={{ top: position.top, left: position.left }}
+    >
+      <div className="px-2.5 py-1.5 border-b border-codex-border flex items-center gap-1.5">
+        <span className="text-gold-primary text-xs font-heading">@</span>
+        <span className="text-[10px] text-text-muted">{query || 'Selecione uma ficha...'}</span>
+      </div>
+      <div className="max-h-52 overflow-y-auto">
+        {filtered.map((s, idx) => (
+          <button
+            key={s.id}
+            id={`at-mention-item-${s.id}`}
+            onClick={() => onSelect(s)}
+            onMouseEnter={() => setActiveIdx(idx)}
+            className={`w-full flex items-center gap-2 px-3 py-1.5 text-left transition-colors ${
+              idx === activeIdx ? 'bg-codex-surface2 text-gold-primary' : 'text-text-secondary hover:bg-codex-bg'
+            }`}
+          >
+            <span className="text-sm shrink-0">{s.type === 'player' ? '🧙' : '👹'}</span>
+            <span className="text-xs flex-1 truncate">{s.name}</span>
+            <span className="text-[9px] text-text-muted shrink-0">
+              PV {s.hpCurrent}/{s.hpMax}
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// =============================================================================
+// Componente: Modal de Link por Seleção (Issue #14)
+// =============================================================================
+
+interface LinkSelectionModalProps {
+  sheets: CharacterSheet[];
+  selectedText: string;
+  onConfirm: (sheet: CharacterSheet) => void;
+  onClose: () => void;
+}
+
+function LinkSelectionModal({ sheets, selectedText, onConfirm, onClose }: LinkSelectionModalProps) {
+  const [search, setSearch] = useState('');
+  const filtered = useMemo(() =>
+    sheets.filter((s) => s.name.toLowerCase().includes(search.toLowerCase())),
+    [sheets, search]
+  );
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
+  return (
+    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/70" onClick={onClose}>
+      <div
+        className="bg-codex-surface border border-gold-dim rounded-xl shadow-gold-glow w-80 max-h-[70vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="px-4 pt-4 pb-3 border-b border-codex-border shrink-0">
+          <p className="text-[10px] text-text-muted uppercase tracking-widest mb-1">🔗 Vincular à Ficha
+          </p>
+          <p className="text-xs text-text-primary">
+            Texto: <span className="text-gold-primary italic">"{selectedText}"</span>
+          </p>
+          <input
+            ref={inputRef}
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar ficha..."
+            className="input-medieval mt-2 text-xs py-1"
+          />
+        </div>
+        {/* Lista */}
+        <div className="flex-1 overflow-y-auto py-1">
+          {filtered.length === 0 ? (
+            <p className="text-center text-text-muted text-xs py-6 italic">Nenhuma ficha encontrada</p>
+          ) : (
+            filtered.map((s) => (
+              <button
+                key={s.id}
+                id={`link-modal-item-${s.id}`}
+                onClick={() => onConfirm(s)}
+                className="w-full flex items-center gap-2 px-4 py-2 text-left hover:bg-codex-bg transition-colors"
+              >
+                <span className="text-sm shrink-0">{s.type === 'player' ? '🧙' : '👹'}</span>
+                <span className="text-xs flex-1 truncate text-text-secondary">{s.name}</span>
+                <span className="text-[9px] text-text-muted shrink-0">CA {s.armorClass}</span>
+              </button>
+            ))
+          )}
+        </div>
+        {/* Footer */}
+        <div className="px-4 py-2 border-t border-codex-border shrink-0 flex justify-end">
+          <button onClick={onClose} className="text-xs text-text-muted hover:text-crimson-bright transition-colors">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// =============================================================================
 // Componente: Painel Flutuante de Ficha (link cruzado CharacterSheet)
 // =============================================================================
 
@@ -575,6 +744,25 @@ function SheetFloatingPanel({ sheet, onClose }: SheetFloatingPanelProps) {
             {sheet.notes}
           </p>
         )}
+
+        {/* Rodapé — ação de navegação */}
+        <div className="mt-4 pt-3 border-t border-codex-border flex justify-end">
+          <button
+            id={`floating-panel-open-sheet-${sheet.id}`}
+            onClick={() => {
+              // Grava o ID antes do dispatch para sobreviver à remontagem do componente
+              localStorage.setItem('codex-sheet-target', sheet.id);
+              window.dispatchEvent(
+                new CustomEvent('codex-navigate', { detail: { view: 'sheets', targetId: sheet.id } })
+              );
+              onClose();
+            }}
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded border border-gold-dim/50 bg-gold-dim/10 text-gold-primary hover:bg-gold-dim/20 hover:border-gold-primary/60 transition-all duration-150"
+          >
+            <span>📄</span>
+            Ver Ficha Completa
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -641,8 +829,15 @@ export default function LoreEncyclopediaView() {
   // Mídias já resolvidas (relativePath → file:// URL para evitar chamadas repetidas ao IPC)
   const [mediaUrls, setMediaUrls] = useState<MediaUrls>({});
 
-  // Painel flutuante de ficha (wikilink cruzado)
+  // Painel flutuante de ficha (wikilink cruzado + sheetlink #14)
   const [floatingSheet, setFloatingSheet] = useState<CharacterSheet | null>(null);
+
+  // Issue #14: estado do dropdown @ e do modal de link por seleção
+  const [atQuery, setAtQuery] = useState<string | null>(null);
+  const [atDropdownPos, setAtDropdownPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const [linkSelectionModal, setLinkSelectionModal] = useState<{ selectedText: string } | null>(null);
+  const [hasTextSelected, setHasTextSelected] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Configuração do modal de recorte
   const [cropConfig, setCropConfig] = useState<{ field: 'iconPath' | 'coverImagePath', imageUrl: string } | null>(null);
@@ -840,6 +1035,132 @@ export default function LoreEncyclopediaView() {
     // Não encontrado: cria nova nota com esse título
     handleAddFile(null);
   }, [loreTree, sheets, handleAddFile]);
+
+  // Issue #14: handler de sheetlink (clique num [[ficha:ID|Label]] no modo leitura)
+  const handleSheetLink = useCallback((sheetId: string) => {
+    const sheet = sheets.find((s) => s.id === sheetId);
+    if (sheet) setFloatingSheet(sheet);
+  }, [sheets]);
+
+  // Issue #14: navegação externa para abrir nota de Lore por ID
+  // (suporta tanto localStorage quanto evento, para não perder a mensagem na remontagem)
+  useEffect(() => {
+    // 1. Payload pendente no localStorage (backlink de Ficha → nota, gravado antes do dispatchEvent)
+    const pendingLoreTarget = localStorage.getItem('codex-lore-target');
+    if (pendingLoreTarget) {
+      const node = loreTree.find((n) => n.id === pendingLoreTarget);
+      if (node) {
+        setSelectedId(node.id);
+        setEditorMode('view');
+      }
+      localStorage.removeItem('codex-lore-target');
+    }
+
+    // 2. Listener para quando a LoreView já está montada (navegação interna sem remontagem)
+    const handler = (e: Event) => {
+      const ev = e as CustomEvent<{ view: string; targetId?: string }>;
+      if (ev.detail?.view === 'lore' && ev.detail.targetId) {
+        const node = loreTree.find((n) => n.id === ev.detail!.targetId);
+        if (node) {
+          setSelectedId(node.id);
+          setEditorMode('view');
+        }
+      }
+    };
+    window.addEventListener('codex-navigate', handler);
+    return () => window.removeEventListener('codex-navigate', handler);
+  }, [loreTree]);
+
+  // Issue #14: onChange da textarea com detecção de gatilho @
+  const handleEditorChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    setDraftContent(value);
+
+    // Detecta @ seguido de texto (sem espaços) antes do cursor
+    const cursor = e.target.selectionStart ?? 0;
+    const textBeforeCursor = value.slice(0, cursor);
+    const atMatch = textBeforeCursor.match(/@(\w*)$/);
+    if (atMatch) {
+      setAtQuery(atMatch[1]); // pode ser vazio logo após o @
+      // Posiciona o dropdown abaixo da textarea como fallback simples
+      const rect = textareaRef.current?.getBoundingClientRect();
+      if (rect) {
+        setAtDropdownPos({ top: rect.bottom + 4, left: rect.left + 16 });
+      }
+    } else {
+      setAtQuery(null);
+    }
+  }, []);
+
+  // Issue #14: seleciona uma ficha no dropdown @ e insere o token
+  const handleAtMentionSelect = useCallback((sheet: CharacterSheet) => {
+    if (!textareaRef.current) { setAtQuery(null); return; }
+    const ta = textareaRef.current;
+    const cursor = ta.selectionStart ?? 0;
+    const textBeforeCursor = draftContent.slice(0, cursor);
+    const atMatch = textBeforeCursor.match(/@(\w*)$/);
+    if (!atMatch) { setAtQuery(null); return; }
+
+    const atStart = cursor - atMatch[0].length; // posição do @
+    const token = `[[ficha:${sheet.id}|${sheet.name}]]`;
+    const newContent =
+      draftContent.slice(0, atStart) +
+      token +
+      draftContent.slice(cursor);
+    setDraftContent(newContent);
+    setAtQuery(null);
+
+    // Move cursor para depois do token
+    setTimeout(() => {
+      if (!textareaRef.current) return;
+      const newPos = atStart + token.length;
+      textareaRef.current.setSelectionRange(newPos, newPos);
+      textareaRef.current.focus();
+    }, 0);
+  }, [draftContent]);
+
+  // Issue #14: detecta texto selecionado na textarea
+  const handleTextareaSelectionChange = useCallback(() => {
+    const sel = window.getSelection()?.toString().trim() ?? '';
+    // Fallback: usar selectionStart/End da textarea
+    const ta = textareaRef.current;
+    if (ta) {
+      const selected = ta.value.slice(ta.selectionStart ?? 0, ta.selectionEnd ?? 0).trim();
+      setHasTextSelected(selected.length > 0);
+    } else {
+      setHasTextSelected(sel.length > 0);
+    }
+  }, []);
+
+  // Issue #14: abre o modal de link por seleção
+  const handleOpenLinkModal = useCallback(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const selected = ta.value.slice(ta.selectionStart ?? 0, ta.selectionEnd ?? 0).trim();
+    if (!selected) return;
+    setLinkSelectionModal({ selectedText: selected });
+  }, []);
+
+  // Issue #14: confirma o link por seleção e envelopa o texto no token
+  const handleLinkSelectionConfirm = useCallback((sheet: CharacterSheet) => {
+    const ta = textareaRef.current;
+    if (!ta || !linkSelectionModal) { setLinkSelectionModal(null); return; }
+    const start = ta.selectionStart ?? 0;
+    const end = ta.selectionEnd ?? 0;
+    const token = `[[ficha:${sheet.id}|${linkSelectionModal.selectedText}]]`;
+    const newContent =
+      draftContent.slice(0, start) +
+      token +
+      draftContent.slice(end);
+    setDraftContent(newContent);
+    setLinkSelectionModal(null);
+    setTimeout(() => {
+      if (!textareaRef.current) return;
+      const newPos = start + token.length;
+      textareaRef.current.setSelectionRange(newPos, newPos);
+      textareaRef.current.focus();
+    }, 0);
+  }, [draftContent, linkSelectionModal]);
 
   // =============================================================================
   // Handlers de Editor
@@ -1109,7 +1430,7 @@ export default function LoreEncyclopediaView() {
                 placeholder="Título da nota..."
                 className="input-medieval flex-1 font-heading text-base"
               />
-              <div className="flex gap-2 shrink-0">
+              <div className="flex gap-2 shrink-0 items-center">
                 <button
                   id="lore-import-md"
                   onClick={handleImportMd}
@@ -1117,6 +1438,20 @@ export default function LoreEncyclopediaView() {
                   title="Importar arquivo .md externo"
                 >
                   📥 Importar .md
+                </button>
+                {/* Botão de Vincular Seleção — Issue #14 */}
+                <button
+                  id="lore-link-selection-btn"
+                  onClick={handleOpenLinkModal}
+                  disabled={!hasTextSelected}
+                  title="Vincular texto selecionado a uma ficha"
+                  className={`text-xs py-1.5 px-2.5 rounded border transition-all duration-150 ${
+                    hasTextSelected
+                      ? 'border-amber-600/60 bg-amber-950/40 text-amber-300 hover:bg-amber-900/40'
+                      : 'border-codex-border text-text-muted opacity-40 cursor-not-allowed'
+                  }`}
+                >
+                  🔗 Vincular
                 </button>
                 <button id="lore-editor-cancel" onClick={handleCancel} className="btn-secondary text-xs py-1.5">Cancelar</button>
                 <button id="lore-editor-save" onClick={handleSave} className="btn-primary text-xs py-1.5">Salvar</button>
@@ -1163,11 +1498,25 @@ export default function LoreEncyclopediaView() {
             {/* Textarea do Editor */}
             <textarea
               id="lore-editor-textarea"
+              ref={textareaRef}
               value={draftContent}
-              onChange={(e) => setDraftContent(e.target.value)}
-              placeholder={`# ${draftTitle || 'Título da Nota'}\n\nEscreva em Markdown...\n\nUse [[Nome da Nota]] para criar links entre notas de Lore ou fichas de personagens.`}
+              onChange={handleEditorChange}
+              onMouseUp={handleTextareaSelectionChange}
+              onKeyUp={handleTextareaSelectionChange}
+              placeholder={`# ${draftTitle || 'Título da Nota'}\n\nEscreva em Markdown...\n\nUse @ para vincular fichas ou [[Nome da Nota]] para links entre notas de Lore.`}
               className="flex-1 resize-none bg-codex-bg text-text-secondary text-sm font-mono leading-relaxed p-5 focus:outline-none selectable border-none"
             />
+
+            {/* Dropdown de autocomplete @ */}
+            {atQuery !== null && (
+              <AtMentionDropdown
+                sheets={sheets}
+                query={atQuery}
+                position={atDropdownPos}
+                onSelect={handleAtMentionSelect}
+                onClose={() => setAtQuery(null)}
+              />
+            )}
           </div>
 
         ) : (
@@ -1225,6 +1574,7 @@ export default function LoreEncyclopediaView() {
                   <MarkdownRenderer
                     content={selectedNode.content}
                     onWikilink={handleWikilink}
+                    onSheetLink={handleSheetLink}
                   />
                 ) : (
                   <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
@@ -1267,9 +1617,19 @@ export default function LoreEncyclopediaView() {
         </div>
       )}
 
-      {/* Painel Flutuante de Ficha (link cruzado) */}
+      {/* Painel Flutuante de Ficha (link cruzado + sheetlink #14) */}
       {floatingSheet && (
         <SheetFloatingPanel sheet={floatingSheet} onClose={() => setFloatingSheet(null)} />
+      )}
+
+      {/* Modal de Link por Seleção (Issue #14) */}
+      {linkSelectionModal && (
+        <LinkSelectionModal
+          sheets={sheets}
+          selectedText={linkSelectionModal.selectedText}
+          onConfirm={handleLinkSelectionConfirm}
+          onClose={() => setLinkSelectionModal(null)}
+        />
       )}
 
       {/* Modal de Recorte de Imagem */}
