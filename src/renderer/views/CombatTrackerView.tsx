@@ -36,9 +36,14 @@ function rollInitiative(dexModifier: number): number {
  */
 function sortByInitiative(combatants: Combatant[]): Combatant[] {
   return [...combatants].sort((a, b) => {
+    // 1: Ordenação principal (maior iniciativa primeiro)
     if (b.initiative !== a.initiative) return b.initiative - a.initiative;
-    if (b.dexterityModifier !== a.dexterityModifier) return b.dexterityModifier - a.dexterityModifier;
-    // Players têm prioridade em caso de empate total
+    // 2: Desempate rigoroso por Atributo de Destreza base (maior destreza primeiro)
+    // Se o Combatant antigo não tiver dexterityScore, faz fallback para o modifier
+    const scoreA = a.dexterityScore ?? a.dexterityModifier;
+    const scoreB = b.dexterityScore ?? b.dexterityModifier;
+    if (scoreB !== scoreA) return scoreB - scoreA;
+    // 3: Jogadores têm prioridade em caso de empate total
     if (a.type === 'player' && b.type === 'creature') return -1;
     if (a.type === 'creature' && b.type === 'player') return 1;
     return 0;
@@ -69,6 +74,7 @@ function instantiateCombatant(sheet: CharacterSheet, displayName: string): Comba
     hpMax: sheet.hpMax,
     armorClass: sheet.armorClass,
     dexterityModifier: dexMod,
+    dexterityScore: sheet.attributes.dexterity,
     isActiveTurn: false,
   };
 }

@@ -823,6 +823,7 @@ export default function LoreEncyclopediaView() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editorMode, setEditorMode] = useState<EditorMode>('view');
+  const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [draftContent, setDraftContent] = useState('');
   const [draftTitle, setDraftTitle] = useState('');
 
@@ -1168,27 +1169,31 @@ export default function LoreEncyclopediaView() {
 
   const handleStartEdit = useCallback(() => {
     if (!selectedNode || selectedNode.type !== 'file') return;
+    setEditingNodeId(selectedNode.id);
     setDraftTitle(selectedNode.title);
     setDraftContent(selectedNode.content ?? '');
     setEditorMode('edit');
   }, [selectedNode]);
 
   const handleSave = useCallback(async () => {
-    if (!selectedNode) return;
+    const nodeToSave = loreTree.find((n) => n.id === editingNodeId);
+    if (!nodeToSave) return;
     const updated: LoreNode = {
-      ...selectedNode,
-      title: draftTitle.trim() || selectedNode.title,
+      ...nodeToSave,
+      title: draftTitle.trim() || nodeToSave.title,
       content: draftContent,
       updatedAt: new Date().toISOString(),
     };
     await saveLoreNode(updated);
     setEditorMode('view');
+    setEditingNodeId(null);
     // Reseta o estado expandido ao editar/salvar para não conflitar
     setIsCoverExpanded(false);
-  }, [selectedNode, draftTitle, draftContent, saveLoreNode]);
+  }, [editingNodeId, loreTree, draftTitle, draftContent, saveLoreNode]);
 
   const handleCancel = useCallback(() => {
     setEditorMode('view');
+    setEditingNodeId(null);
   }, []);
 
   // =============================================================================

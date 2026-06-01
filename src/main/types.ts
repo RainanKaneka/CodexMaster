@@ -292,6 +292,8 @@ export interface Combatant {
    * Usado para desempates de iniciativa e rolagem automatizada.
    */
   dexterityModifier: number;
+  /** Valor base de Destreza para desempate rigoroso de iniciativa */
+  dexterityScore: number;
   /** Indica se é o turno deste combatente no round atual */
   isActiveTurn: boolean;
   /**
