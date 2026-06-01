@@ -1,10 +1,18 @@
-
+import { useState, useEffect } from 'react';
 
 // =============================================================================
 // SettingsView — Tela de Configurações (placeholder MVP)
 // =============================================================================
 
 export default function SettingsView() {
+  const [appVersion, setAppVersion] = useState<string>('');
+
+  useEffect(() => {
+    window.codexAPI.getAppVersion()
+      .then((v: string) => setAppVersion(v))
+      .catch(() => setAppVersion('—'));
+  }, []);
+
   return (
     <div className="flex flex-col h-full bg-codex-bg p-8">
       <h1 className="font-heading text-2xl text-gradient-gold mb-2">Configurações</h1>
@@ -17,7 +25,9 @@ export default function SettingsView() {
         <div className="space-y-3 text-sm text-text-secondary">
           <div className="flex justify-between">
             <span className="text-text-muted">Versão</span>
-            <span className="font-mono text-gold-primary">1.1.0</span>
+            <span className="font-mono text-gold-primary">
+              {appVersion ? `v${appVersion}` : '—'}
+            </span>
           </div>
           <div className="flex justify-between">
             <span className="text-text-muted">Stack</span>

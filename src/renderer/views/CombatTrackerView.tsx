@@ -487,7 +487,7 @@ function CombatantRow({ combatant, sheet, isActive, onHpChange, onSetHp, onSetTe
           </div>
           <div className="flex items-center gap-2 mt-0.5">
             <span className={`text-[10px] ${combatant.type === 'player' ? 'text-sky-400' : 'text-amber-400'}`}>
-              {combatant.type === 'player' ? '🧙 Jogador' : '👹 Criatura'}
+              {combatant.type === 'player' ? '🧙 Personagem' : '👹 Criatura'}
             </span>
             {/* CA Interativa — clica para definir modificador temporário */}
             {editingTempAC ? (
@@ -1741,7 +1741,7 @@ export default function CombatTrackerView() {
             {/* Filtro de Tipo */}
             <div className="flex gap-1 mb-2">
               {(['all', 'player', 'creature'] as const).map((type) => {
-                const label = type === 'all' ? 'Todos' : type === 'player' ? '🧙 Jogadores' : '👹 Criaturas';
+                const label = type === 'all' ? 'Todos' : type === 'player' ? '🧙 Personagens' : '👹 Criaturas';
                 return (
                   <button
                     key={type}

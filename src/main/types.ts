@@ -575,6 +575,10 @@ export interface CodexAPI {
    * Retorna o caminho relativo do arquivo gerado.
    */
   saveCroppedImage: (base64Data: string, prefix: string) => Promise<string | null>;
+  /**
+   * Retorna a versão atual do aplicativo.
+   */
+  getAppVersion: () => Promise<string>;
 }
 
 // Declaração global para que o renderer reconheça window.codexAPI com tipagem

@@ -695,7 +695,7 @@ function SheetFloatingPanel({ sheet, onClose }: SheetFloatingPanelProps) {
           <div>
             <h2 className="font-heading text-xl text-text-primary">{sheet.name}</h2>
             <p className="text-xs text-text-muted mt-0.5">
-              {sheet.type === 'player' ? '🧙 Jogador' : '👹 Criatura'} ·{' '}
+              {sheet.type === 'player' ? '🧙 Personagem' : '👹 Criatura'} ·{' '}
               {sheet.class ?? sheet.race ?? 'Desconhecido'}
             </p>
           </div>

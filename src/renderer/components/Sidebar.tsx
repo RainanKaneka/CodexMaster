@@ -1,4 +1,4 @@
-
+import { useState, useEffect } from 'react';
 
 // =============================================================================
 // Sidebar — Barra lateral de navegação principal do CodexMaster
@@ -77,6 +77,14 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 export default function Sidebar({ activeView, onNavigate }: SidebarProps) {
+  const [appVersion, setAppVersion] = useState<string>('');
+
+  useEffect(() => {
+    window.codexAPI.getAppVersion()
+      .then((v: string) => setAppVersion(v))
+      .catch(() => setAppVersion(''));
+  }, []);
+
   return (
     <aside
       id="sidebar-navigation"
@@ -155,7 +163,7 @@ export default function Sidebar({ activeView, onNavigate }: SidebarProps) {
       <div className="flex flex-col items-center mt-auto px-2">
         <div className="w-8 h-px bg-gold-dim mx-auto mb-3 opacity-30" />
         <span className="text-[9px] text-text-muted font-mono tracking-wide">
-          v0.1
+          {appVersion ? `v${appVersion}` : ''}
         </span>
       </div>
     </aside>

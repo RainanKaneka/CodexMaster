@@ -576,7 +576,7 @@ function SheetForm({ sheet: initialSheet, onSave, onCancel, onAutoSave, loreTree
                 }
               `}
             >
-              {type === 'player' ? '⚔️ Jogador' : '🐉 Criatura'}
+              {type === 'player' ? '⚔️ Personagem' : '🐉 Criatura'}
             </button>
           ))}
         </div>
@@ -1077,7 +1077,7 @@ export default function SheetsView() {
               onClick={() => handleNewSheet('player')}
               className="btn-secondary flex-1 text-xs py-1.5"
             >
-              + Jogador
+              + Personagem
             </button>
             <button
               id="sheet-new-creature"
@@ -1113,7 +1113,7 @@ export default function SheetsView() {
                   }
                 `}
               >
-                {type === 'all' ? 'Todos' : type === 'player' ? 'Jogadores' : 'Criaturas'}
+                {type === 'all' ? 'Todos' : type === 'player' ? 'Personagens' : 'Criaturas'}
               </button>
             ))}
           </div>
@@ -1127,7 +1127,7 @@ export default function SheetsView() {
               <p className="text-text-muted text-xs">
                 {searchQuery
                   ? 'Nenhuma ficha encontrada.'
-                  : 'Nenhuma ficha criada ainda.\nClique em "+ Jogador" ou "+ Criatura".'}
+                  : 'Nenhuma ficha criada ainda.\nClique em "+ Personagem" ou "+ Criatura".'}
               </p>
             </div>
           ) : (
@@ -1147,7 +1147,7 @@ export default function SheetsView() {
         {sheets.length > 0 && (
           <div className="px-4 py-2 border-t border-codex-border">
             <p className="text-text-muted text-xs text-center">
-              {sheets.filter(s => s.type === 'player').length} jogadores · {sheets.filter(s => s.type === 'creature').length} criaturas
+              {sheets.filter(s => s.type === 'player').length} personagens · {sheets.filter(s => s.type === 'creature').length} criaturas
             </p>
           </div>
         )}

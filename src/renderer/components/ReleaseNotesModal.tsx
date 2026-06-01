@@ -35,6 +35,8 @@ function ReleaseNotesModal({ onClose, currentVersion }: ReleaseNotesModalProps) 
 
   useEffect(() => {
     const controller = new AbortController();
+    // Timeout de 8s — se a API do GitHub demorar, exibe erro amigável
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
 
     fetch(RELEASES_API, {
       signal: controller.signal,
@@ -42,23 +44,32 @@ function ReleaseNotesModal({ onClose, currentVersion }: ReleaseNotesModalProps) 
     })
       .then((res) => {
         if (!res.ok) throw new Error(`GitHub API retornou ${res.status}`);
-        return res.json();
+        return res.json() as Promise<{ body?: string }>;
       })
       .then((data) => {
         setMarkdown(
-          (data.body as string | undefined)?.trim() ||
+          data.body?.trim() ||
           '_Nenhuma nota de atualização disponível para esta versão._'
         );
       })
-      .catch((err) => {
-        if (err.name !== 'AbortError') {
-          setError('Não foi possível carregar as notas de atualização.');
-          console.warn('[ReleaseNotesModal] fetch error:', err);
-        }
+      .catch((err: unknown) => {
+        const isAbort = err instanceof DOMException && err.name === 'AbortError';
+        setError(
+          isAbort
+            ? 'A requisição demorou demais. Verifique sua conexão e tente novamente.'
+            : 'Não foi possível carregar as notas de atualização.'
+        );
+        if (!isAbort) console.warn('[ReleaseNotesModal] fetch error:', err);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        clearTimeout(timeoutId);
+        setLoading(false);
+      });
 
-    return () => controller.abort();
+    return () => {
+      clearTimeout(timeoutId);
+      controller.abort();
+    };
   }, []);
 
   return (
@@ -195,16 +206,17 @@ export function useReleaseNotes() {
 
   useEffect(() => {
     // Só exibe em produção — em dev o modal poluiria o fluxo
+    // @ts-ignore
     if (import.meta.env.DEV) return;
 
-    window.codexAPI.getAppVersion().then((version) => {
+    window.codexAPI.getAppVersion().then((version: string) => {
       setCurrentVersion(version);
       const lastSeen = localStorage.getItem(STORAGE_KEY);
       if (lastSeen !== version) {
         // Versão nova (ou primeira execução) — exibe o modal
         setShowModal(true);
       }
-    }).catch((err) => {
+    }).catch((err: unknown) => {
       console.warn('[useReleaseNotes] getAppVersion falhou:', err);
     });
   }, []);

@@ -353,7 +353,7 @@ function PinEditorPanel({ pin, sheets, onFieldChange, onDelete, onClose, isSavin
                 <CharacterAvatar name={char.name} size="lg" />
                 <div>
                   <h3 className="font-heading text-xl text-gold-primary leading-tight">{char.name}</h3>
-                  <p className="text-xs text-text-secondary">{char.type === 'player' ? 'Jogador' : 'Criatura'}</p>
+                  <p className="text-xs text-text-secondary">{char.type === 'player' ? 'Personagem' : 'Criatura'}</p>
                 </div>
               </div>
               <div className="flex justify-between text-sm mb-6 bg-codex-bg p-3 rounded border border-codex-border">
