@@ -989,7 +989,7 @@ function ItemFilterPanel({ filters, onChange }: ItemFilterPanelProps) {
 // Componente Principal: CompendiumView
 // =============================================================================
 
-type CompendiumTab = 'spells' | 'items';
+type CompendiumTab = 'spells' | 'items' | 'homebrew';
 type PanelMode = 'view' | 'edit' | 'create';
 
 export default function CompendiumView() {
@@ -1001,7 +1001,6 @@ export default function CompendiumView() {
   const [selectedSpellId, setSelectedSpellId] = useState<string | null>(null);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [panelMode, setPanelMode] = useState<PanelMode>('view');
-  const [showHomebrew, setShowHomebrew] = useState(false);
 
   // Entidades temporárias para criação/edição
   const [editingSpell, setEditingSpell] = useState<Spell | null>(null);
@@ -1151,10 +1150,10 @@ export default function CompendiumView() {
 
   // --- Renderização do Painel Direito ---
   const renderRightPanel = () => {
-    if (showHomebrew) {
+    if (activeTab === 'homebrew') {
       return (
-        <HomebrewManager 
-          onClose={() => setShowHomebrew(false)} 
+        <HomebrewManager
+          onClose={() => handleTabChange('spells')}
         />
       );
     }
@@ -1224,10 +1223,21 @@ export default function CompendiumView() {
           </p>
         </div>
 
-        {activeTab === 'spells' ? (
-          <SpellFilterPanel filters={spellFilters} onChange={setSpellFilters} />
-        ) : (
-          <ItemFilterPanel filters={itemFilters} onChange={setItemFilters} />
+        {/* Filtros — só exibe para Magias e Itens; Homebrew tem painel próprio */}
+        {activeTab !== 'homebrew' && (
+          activeTab === 'spells' ? (
+            <SpellFilterPanel filters={spellFilters} onChange={setSpellFilters} />
+          ) : (
+            <ItemFilterPanel filters={itemFilters} onChange={setItemFilters} />
+          )
+        )}
+        {activeTab === 'homebrew' && (
+          <div className="flex flex-col items-center justify-center flex-1 gap-2 px-3 py-6 text-center">
+            <span className="text-3xl opacity-30">⚙️</span>
+            <p className="text-[10px] text-text-muted italic leading-relaxed">
+              Gerencie Escolas de Magia e Níveis customizados no painel ao lado.
+            </p>
+          </div>
         )}
       </div>
 
@@ -1236,9 +1246,9 @@ export default function CompendiumView() {
 
         {/* Cabeçalho com Sub-abas e Busca */}
         <div className="shrink-0 border-b border-codex-border">
-          {/* Sub-abas */}
+          {/* Sub-abas: Magias | Itens | Homebrew */}
           <div className="flex">
-            {(['spells', 'items'] as const).map((tab) => (
+            {(['spells', 'items', 'homebrew'] as const).map((tab) => (
               <button
                 key={tab}
                 id={`compendium-tab-${tab}`}
@@ -1247,148 +1257,145 @@ export default function CompendiumView() {
                   flex-1 py-3 text-xs font-heading tracking-wide uppercase transition-all duration-150
                   ${activeTab === tab
                     ? 'text-gold-primary border-b-2 border-gold-primary bg-codex-surface2'
-                    : 'text-text-muted hover:text-text-secondary border-b-2 border-transparent'
+                    : tab === 'homebrew'
+                      ? 'text-emerald-400 hover:text-emerald-300 border-b-2 border-transparent'
+                      : 'text-text-muted hover:text-text-secondary border-b-2 border-transparent'
                   }
                 `}
               >
-                {tab === 'spells' ? '✨ Magias' : '⚔️ Itens'}
+                {tab === 'spells' ? '✨ Magias' : tab === 'items' ? '⚔️ Itens' : '⚙️ Brew'}
               </button>
             ))}
-            <button
-              onClick={() => { setShowHomebrew(true); setPanelMode('view'); }}
-              className={`
-                py-3 px-3 text-[10px] font-heading tracking-wide uppercase transition-all duration-150
-                ${showHomebrew
-                  ? 'text-gold-primary border-b-2 border-gold-primary bg-codex-surface2'
-                  : 'text-emerald-400 hover:text-emerald-300 border-b-2 border-transparent'
-                }
-              `}
-              title="Configurações de Regras Homebrew"
-            >
-              ⚙️ Homebrew
-            </button>
           </div>
 
-          {/* Busca + Botão Novo */}
-          <div className="flex gap-2 p-2">
-            <input
-              id="compendium-search"
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Buscar por nome..."
-              className="input-medieval flex-1 text-xs py-1.5"
-            />
-            <button
-              id={activeTab === 'spells' ? 'compendium-new-spell' : 'compendium-new-item'}
-              onClick={activeTab === 'spells' ? handleNewSpell : handleNewItem}
-              className="btn-primary text-xs py-1.5 px-3 shrink-0"
-              title={activeTab === 'spells' ? 'Nova Magia' : 'Novo Item'}
-            >
-              +
-            </button>
-          </div>
+          {/* Busca + Botão Novo — ocultos na aba Homebrew */}
+          {activeTab !== 'homebrew' && (
+            <div className="flex gap-2 p-2">
+              <input
+                id="compendium-search"
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Buscar por nome..."
+                className="input-medieval flex-1 text-xs py-1.5"
+              />
+              <button
+                id={activeTab === 'spells' ? 'compendium-new-spell' : 'compendium-new-item'}
+                onClick={activeTab === 'spells' ? handleNewSpell : handleNewItem}
+                className="btn-primary text-xs py-1.5 px-3 shrink-0"
+                title={activeTab === 'spells' ? 'Nova Magia' : 'Novo Item'}
+              >
+                +
+              </button>
+            </div>
+          )}
 
           {/* Contador */}
-          <div className="px-3 pb-2">
-            <p className="text-[10px] text-text-muted">
-              {activeTab === 'spells'
-                ? `${filteredSpells.length} de ${spells.length} magia${spells.length !== 1 ? 's' : ''}`
-                : `${filteredItems.length} de ${items.length} item${items.length !== 1 ? 'ns' : ''}`
-              }
-            </p>
-          </div>
-        </div>
-
-        {/* Lista de Entradas */}
-        <div className="flex-1 overflow-y-auto">
-          {activeTab === 'spells' ? (
-            filteredSpells.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-32 gap-2">
-                <p className="text-text-muted text-xs italic">
-                  {spells.length === 0 ? 'Nenhuma magia cadastrada.' : 'Nenhuma magia encontrada.'}
-                </p>
-              </div>
-            ) : (
-              <div className="flex flex-col">
-                {filteredSpells.map((spell) => {
-                  const isSelected = spell.id === selectedSpellId && panelMode !== 'create';
-                  return (
-                    <button
-                      key={spell.id}
-                      id={`spell-list-item-${spell.id}`}
-                      onClick={() => { setSelectedSpellId(spell.id); setPanelMode('view'); setEditingSpell(null); }}
-                      className={`
-                        w-full text-left px-3 py-2.5 border-b border-codex-border
-                        transition-all duration-100 ease-out
-                        ${isSelected
-                          ? 'bg-codex-surface2 border-l-2 border-l-gold-primary'
-                          : 'hover:bg-codex-surface2 border-l-2 border-l-transparent'
-                        }
-                      `}
-                    >
-                      <p className={`text-xs font-medium leading-tight ${isSelected ? 'text-text-primary' : 'text-text-secondary'}`}>
-                        {spell.name}
-                      </p>
-                      <p 
-                        className={`text-[10px] mt-0.5 ${SCHOOL_COLORS[spell.school as SpellSchool] || ''}`}
-                        style={
-                          !SCHOOL_COLORS[spell.school as SpellSchool] 
-                            ? { color: homebrewSettings.customMagicSchools.find(s => s.name === spell.school)?.color || '#888' } 
-                            : undefined
-                        }
-                      >
-                        {levelLabel(spell.level)} · {spell.school}
-                      </p>
-                    </button>
-                  );
-                })}
-              </div>
-            )
-          ) : (
-            filteredItems.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-32 gap-2">
-                <p className="text-text-muted text-xs italic">
-                  {items.length === 0 ? 'Nenhum item cadastrado.' : 'Nenhum item encontrado.'}
-                </p>
-              </div>
-            ) : (
-              <div className="flex flex-col">
-                {filteredItems.map((item) => {
-                  const isSelected = item.id === selectedItemId && panelMode !== 'create';
-                  return (
-                    <button
-                      key={item.id}
-                      id={`item-list-item-${item.id}`}
-                      onClick={() => { setSelectedItemId(item.id); setPanelMode('view'); setEditingItem(null); }}
-                      className={`
-                        w-full text-left px-3 py-2.5 border-b border-codex-border
-                        transition-all duration-100 ease-out
-                        ${isSelected
-                          ? 'bg-codex-surface2 border-l-2 border-l-gold-primary'
-                          : 'hover:bg-codex-surface2 border-l-2 border-l-transparent'
-                        }
-                      `}
-                    >
-                      <p className={`text-xs font-medium leading-tight ${isSelected ? 'text-text-primary' : 'text-text-secondary'}`}>
-                        {item.name}
-                      </p>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className={`text-[10px] ${RARITY_COLORS[item.rarity].split(' ')[0]}`}>
-                          {item.rarity}
-                        </span>
-                        <span className="text-[10px] text-text-muted">· {item.type}</span>
-                        {item.attunement && (
-                          <span className="text-[10px] text-gold-muted">· 🔗</span>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )
+          {activeTab !== 'homebrew' && (
+            <div className="px-3 pb-2">
+              <p className="text-[10px] text-text-muted">
+                {activeTab === 'spells'
+                  ? `${filteredSpells.length} de ${spells.length} magia${spells.length !== 1 ? 's' : ''}`
+                  : `${filteredItems.length} de ${items.length} item${items.length !== 1 ? 'ns' : ''}`
+                }
+              </p>
+            </div>
           )}
         </div>
+
+        {/* Lista de Entradas — oculta na aba Homebrew */}
+        {activeTab !== 'homebrew' && (
+          <div className="flex-1 overflow-y-auto">
+            {activeTab === 'spells' ? (
+              filteredSpells.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-32 gap-2">
+                  <p className="text-text-muted text-xs italic">
+                    {spells.length === 0 ? 'Nenhuma magia cadastrada.' : 'Nenhuma magia encontrada.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="flex flex-col">
+                  {filteredSpells.map((spell) => {
+                    const isSelected = spell.id === selectedSpellId && panelMode !== 'create';
+                    return (
+                      <button
+                        key={spell.id}
+                        id={`spell-list-item-${spell.id}`}
+                        onClick={() => { setSelectedSpellId(spell.id); setPanelMode('view'); setEditingSpell(null); }}
+                        className={`
+                          w-full text-left px-3 py-2.5 border-b border-codex-border
+                          transition-all duration-100 ease-out
+                          ${isSelected
+                            ? 'bg-codex-surface2 border-l-2 border-l-gold-primary'
+                            : 'hover:bg-codex-surface2 border-l-2 border-l-transparent'
+                          }
+                        `}
+                      >
+                        <p className={`text-xs font-medium leading-tight ${isSelected ? 'text-text-primary' : 'text-text-secondary'}`}>
+                          {spell.name}
+                        </p>
+                        <p
+                          className={`text-[10px] mt-0.5 ${SCHOOL_COLORS[spell.school as SpellSchool] || ''}`}
+                          style={
+                            !SCHOOL_COLORS[spell.school as SpellSchool]
+                              ? { color: homebrewSettings.customMagicSchools.find(s => s.name === spell.school)?.color || '#888' }
+                              : undefined
+                          }
+                        >
+                          {levelLabel(spell.level)} · {spell.school}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              )
+            ) : (
+              filteredItems.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-32 gap-2">
+                  <p className="text-text-muted text-xs italic">
+                    {items.length === 0 ? 'Nenhum item cadastrado.' : 'Nenhum item encontrado.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="flex flex-col">
+                  {filteredItems.map((item) => {
+                    const isSelected = item.id === selectedItemId && panelMode !== 'create';
+                    return (
+                      <button
+                        key={item.id}
+                        id={`item-list-item-${item.id}`}
+                        onClick={() => { setSelectedItemId(item.id); setPanelMode('view'); setEditingItem(null); }}
+                        className={`
+                          w-full text-left px-3 py-2.5 border-b border-codex-border
+                          transition-all duration-100 ease-out
+                          ${isSelected
+                            ? 'bg-codex-surface2 border-l-2 border-l-gold-primary'
+                            : 'hover:bg-codex-surface2 border-l-2 border-l-transparent'
+                          }
+                        `}
+                      >
+                        <p className={`text-xs font-medium leading-tight ${isSelected ? 'text-text-primary' : 'text-text-secondary'}`}>
+                          {item.name}
+                        </p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className={`text-[10px] ${RARITY_COLORS[item.rarity].split(' ')[0]}`}>
+                            {item.rarity}
+                          </span>
+                          <span className="text-[10px] text-text-muted">· {item.type}</span>
+                          {item.attunement && (
+                            <span className="text-[10px] text-gold-muted">· 🔗</span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )
+            )}
+          </div>
+        )}
+        {/* Quando Homebrew ativo, a coluna 2 fica vazia (conteúdo vai para coluna 3) */}
+        {activeTab === 'homebrew' && <div className="flex-1" />}
       </div>
 
       {/* ===== Coluna 3: Painel de Detalhes/Formulário ===== */}

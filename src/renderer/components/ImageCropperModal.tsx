@@ -97,7 +97,8 @@ export function ImageCropperModal({
       <div className="bg-codex-surface border border-codex-border rounded-lg p-5 flex flex-col max-h-[90vh] max-w-4xl w-full shadow-2xl overflow-hidden">
         <h3 className="font-heading text-xl text-gold-primary mb-4 border-b border-codex-border pb-2 shrink-0">Ajustar Enquadramento</h3>
         
-        <div className="flex-1 overflow-hidden bg-codex-bg rounded border border-codex-border flex items-center justify-center p-4 min-h-[300px]">
+        {/* Área do crop — flex-1 + min-h-0 garante que não extrapola a altura do modal */}
+        <div className="flex-1 min-h-0 overflow-auto bg-codex-bg rounded border border-codex-border flex items-center justify-center p-4">
           <ReactCrop
             crop={crop}
             onChange={(c) => setCrop(c)}
@@ -105,13 +106,13 @@ export function ImageCropperModal({
             aspect={aspectRatio}
             circularCrop={circularCrop}
           >
-            <img 
-              ref={imgRef} 
-              src={imageUrl} 
-              alt="Crop" 
-              className="max-h-[70vh] w-auto object-contain"
+            <img
+              ref={imgRef}
+              src={imageUrl}
+              alt="Crop"
+              style={{ maxHeight: '58vh', maxWidth: '100%', objectFit: 'contain', display: 'block' }}
               onLoad={onImageLoad}
-              crossOrigin="anonymous" // Ajuda a evitar canvas taint se a imagem vier de outro lugar
+              crossOrigin="anonymous"
             />
           </ReactCrop>
         </div>
