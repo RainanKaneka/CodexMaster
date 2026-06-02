@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { CharacterSheet, MapData, Spell, Item, ActiveEncounter, LoreNode, SessionLog, AdventureHook, RollTable } from './types';
+import { CharacterSheet, MapData, Spell, Item, Ability, ActiveEncounter, LoreNode, SessionLog, AdventureHook, RollTable } from './types';
 
 // =============================================================================
 // PRELOAD.TS — Ponte de Segurança IPC entre Main e Renderer
@@ -84,6 +84,19 @@ contextBridge.exposeInMainWorld('codexAPI', {
   /** Remove um item do Compêndio pelo ID */
   deleteItem: (id: string): Promise<{ success: boolean }> =>
     ipcRenderer.invoke('db:deleteItem', id),
+
+  // --- Compêndio: Habilidades (v1.2.0) ---
+  /** Retorna todas as habilidades do Compêndio */
+  getAbilities: (): Promise<Ability[]> =>
+    ipcRenderer.invoke('db:getAbilities'),
+
+  /** Cria ou atualiza uma habilidade no Compêndio */
+  saveAbility: (ability: Ability): Promise<{ success: boolean }> =>
+    ipcRenderer.invoke('db:saveAbility', ability),
+
+  /** Remove uma habilidade do Compêndio pelo ID */
+  deleteAbility: (id: string): Promise<{ success: boolean }> =>
+    ipcRenderer.invoke('db:deleteAbility', id),
 
   // --- Rastreador de Combate (Fase 3) ---
   /** Retorna o encontro de combate ativo, ou null se não houver */

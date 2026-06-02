@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, dialog, protocol, net } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import path from 'path';
 import fs from 'fs';
-import { LocalDatabase, CharacterSheet, MapData, Spell, Item, ActiveEncounter, LoreNode, SessionLog, AdventureHook, RollTable } from './types';
+import { LocalDatabase, CharacterSheet, MapData, Spell, Item, Ability, ActiveEncounter, LoreNode, SessionLog, AdventureHook, RollTable } from './types';
 
 // =============================================================================
 // CONFIGURAÇÃO DE PATHS
@@ -40,6 +40,7 @@ function getEmptyDatabase(): LocalDatabase {
     campaignNotes: '',
     spells: [],
     items: [],
+    abilities: [],
     activeEncounter: null,
     loreTree: [],
     sessions: [],
@@ -79,6 +80,7 @@ function readDatabase(): LocalDatabase {
       campaignNotes:   parsed.campaignNotes   ?? '',
       spells:          parsed.spells          ?? [],
       items:           parsed.items           ?? [],
+      abilities:       parsed.abilities       ?? [],
       activeEncounter: parsed.activeEncounter ?? null,
       loreTree:        parsed.loreTree        ?? [],
       sessions:        parsed.sessions        ?? [],
@@ -352,6 +354,35 @@ ipcMain.handle('db:saveItem', async (_event, item: Item) => {
 ipcMain.handle('db:deleteItem', async (_event, id: string) => {
   const db = readDatabase();
   db.items = db.items.filter((i) => i.id !== id);
+  writeDatabase(db);
+  return { success: true };
+});
+
+// ----- COMPÊNDIO: HABILIDADES (v1.2.0) -----
+
+/** Retorna todas as habilidades (Passivas/Ativas) cadastradas */
+ipcMain.handle('db:getAbilities', async () => {
+  const db = readDatabase();
+  return db.abilities;
+});
+
+/** Salva (cria ou atualiza) uma habilidade no Compêndio */
+ipcMain.handle('db:saveAbility', async (_event, ability: Ability) => {
+  const db = readDatabase();
+  const index = db.abilities.findIndex((a) => a.id === ability.id);
+  if (index >= 0) {
+    db.abilities[index] = ability; // Atualização
+  } else {
+    db.abilities.push(ability);    // Criação
+  }
+  writeDatabase(db);
+  return { success: true };
+});
+
+/** Remove uma habilidade do Compêndio pelo ID */
+ipcMain.handle('db:deleteAbility', async (_event, id: string) => {
+  const db = readDatabase();
+  db.abilities = db.abilities.filter((a) => a.id !== id);
   writeDatabase(db);
   return { success: true };
 });

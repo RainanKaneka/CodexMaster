@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
-import { CharacterSheet, MapData, Spell, Item, ActiveEncounter, LoreNode, SessionLog, AdventureHook, RollTable, HomebrewSettings } from '../../main/types';
+import { CharacterSheet, MapData, Spell, Item, Ability, ActiveEncounter, LoreNode, SessionLog, AdventureHook, RollTable, HomebrewSettings } from '../../main/types';
 
 // =============================================================================
 // DatabaseContext — Estado Global do CodexMaster
@@ -20,6 +20,7 @@ interface DatabaseContextValue {
   maps: MapData[];
   spells: Spell[];
   items: Item[];
+  abilities: Ability[];
   activeEncounter: ActiveEncounter | null;
   loreTree: LoreNode[];
   isLoading: boolean;
@@ -40,6 +41,10 @@ interface DatabaseContextValue {
   // Ações — Itens (Fase 2)
   saveItem: (item: Item) => Promise<void>;
   deleteItem: (id: string) => Promise<void>;
+
+  // Ações — Habilidades (v1.2.0)
+  saveAbility: (ability: Ability) => Promise<void>;
+  deleteAbility: (id: string) => Promise<void>;
 
   // Ações — Encontro de Combate (Fase 3)
   saveActiveEncounter: (encounter: ActiveEncounter | null) => Promise<void>;
@@ -88,6 +93,7 @@ export function DatabaseProvider({ children }: DatabaseProviderProps) {
   const [maps, setMaps] = useState<MapData[]>([]);
   const [spells, setSpells] = useState<Spell[]>([]);
   const [items, setItems] = useState<Item[]>([]);
+  const [abilities, setAbilities] = useState<Ability[]>([]);
   const [activeEncounter, setActiveEncounter] = useState<ActiveEncounter | null>(null);
   const [loreTree, setLoreTree] = useState<LoreNode[]>([]);
   const [sessions, setSessions] = useState<SessionLog[]>([]);
@@ -102,11 +108,12 @@ export function DatabaseProvider({ children }: DatabaseProviderProps) {
     const loadData = async () => {
       try {
         setIsLoading(true);
-        const [loadedSheets, loadedMaps, loadedSpells, loadedItems, loadedEncounter, loadedLore, loadedSessions, loadedHooks, loadedRollTables, loadedHomebrew] = await Promise.all([
+        const [loadedSheets, loadedMaps, loadedSpells, loadedItems, loadedAbilities, loadedEncounter, loadedLore, loadedSessions, loadedHooks, loadedRollTables, loadedHomebrew] = await Promise.all([
           window.codexAPI.getSheets(),
           window.codexAPI.getMaps(),
           window.codexAPI.getSpells(),
           window.codexAPI.getItems(),
+          window.codexAPI.getAbilities(),
           window.codexAPI.getActiveEncounter(),
           window.codexAPI.getLoreTree(),
           window.codexAPI.getSessions(),
@@ -118,6 +125,7 @@ export function DatabaseProvider({ children }: DatabaseProviderProps) {
         setMaps([...loadedMaps]);
         setSpells([...loadedSpells]);
         setItems([...loadedItems]);
+        setAbilities([...loadedAbilities]);
         setActiveEncounter(loadedEncounter);
         setLoreTree([...loadedLore]);
         setSessions([...loadedSessions]);
@@ -260,6 +268,41 @@ export function DatabaseProvider({ children }: DatabaseProviderProps) {
     } catch (err) {
       setError('Falha ao excluir o item.');
       console.error('[DatabaseContext] Erro ao excluir item:', err);
+    }
+  }, []);
+
+  // --- Ações de Habilidades (v1.2.0) ---
+
+  const saveAbility = useCallback(async (ability: Ability) => {
+    try {
+      const result = await window.codexAPI.saveAbility(ability);
+      if (result.success) {
+        setAbilities((prev) => {
+          const index = prev.findIndex((a) => a.id === ability.id);
+          if (index >= 0) {
+            const next = [...prev];
+            next[index] = ability;
+            return next;
+          }
+          return [...prev, ability];
+        });
+      } else {
+        throw new Error('Retorno do backend inválido ou sem sucesso.');
+      }
+    } catch (err) {
+      setError('Falha ao salvar a habilidade.');
+      console.error('[DatabaseContext] Erro ao salvar habilidade:', err);
+      throw err;
+    }
+  }, []);
+
+  const deleteAbility = useCallback(async (id: string) => {
+    try {
+      await window.codexAPI.deleteAbility(id);
+      setAbilities((prev) => prev.filter((a) => a.id !== id));
+    } catch (err) {
+      setError('Falha ao excluir a habilidade.');
+      console.error('[DatabaseContext] Erro ao excluir habilidade:', err);
     }
   }, []);
 
@@ -427,6 +470,7 @@ export function DatabaseProvider({ children }: DatabaseProviderProps) {
     maps,
     spells,
     items,
+    abilities,
     activeEncounter,
     loreTree,
     sessions,
@@ -443,6 +487,8 @@ export function DatabaseProvider({ children }: DatabaseProviderProps) {
     deleteSpell,
     saveItem,
     deleteItem,
+    saveAbility,
+    deleteAbility,
     saveActiveEncounter,
     saveLoreNode,
     deleteLoreNode,

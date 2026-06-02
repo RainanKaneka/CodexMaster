@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
-import { Spell, Item, SpellSchool, ItemType, ItemRarity } from '../../main/types';
+import { Spell, Item, Ability, SpellSchool, ItemType, ItemRarity } from '../../main/types';
+import ReactMarkdown from 'react-markdown';
 import { useDatabase } from '../context/DatabaseContext';
 import { generateId } from '../utils/dnd5e';
 
@@ -31,6 +32,17 @@ const ITEM_TYPES: ItemType[] = [
 const ITEM_RARITIES: ItemRarity[] = [
   'Comum', 'Incomum', 'Raro', 'Muito Raro', 'Lendário', 'Artefato',
 ];
+
+const markdownComponents: import('react-markdown').Components = {
+  h1: ({node, ...props}) => <h1 className="text-2xl font-bold text-gold-primary mb-4 mt-2" {...props} />,
+  h2: ({node, ...props}) => <h2 className="text-xl font-semibold text-gold-primary mb-3 mt-2" {...props} />,
+  h3: ({node, ...props}) => <h3 className="text-lg font-medium text-gold-primary mb-2 mt-1" {...props} />,
+  ul: ({node, ...props}) => <ul className="list-disc list-inside mb-4 space-y-1" {...props} />,
+  ol: ({node, ...props}) => <ol className="list-decimal list-inside mb-4 space-y-1" {...props} />,
+  strong: ({node, ...props}) => <strong className="font-bold text-gold-primary" {...props} />,
+  p: ({node, ...props}) => <p className="mb-3" {...props} />,
+  a: ({node, ...props}) => <a className="text-gold-primary hover:text-gold-dim underline transition-colors" {...props} />,
+};
 
 /** Cor de badge para cada raridade de item (tons medievais, sem neons puros) */
 const RARITY_COLORS: Record<ItemRarity, string> = {
@@ -72,6 +84,18 @@ function createEmptySpell(): Spell {
     range: 'Pessoal',
     components: { verbal: true, somatic: false, material: false },
     duration: 'Instantâneo',
+    description: '',
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function createEmptyAbility(): Ability {
+  const now = new Date().toISOString();
+  return {
+    id: generateId(),
+    name: '',
+    type: 'Passiva',
     description: '',
     createdAt: now,
     updatedAt: now,
@@ -541,9 +565,9 @@ function SpellDetail({ spell, onEdit, onDelete }: SpellDetailProps) {
       {/* Descrição */}
       <div className="card p-4 flex-1">
         <p className="text-[10px] text-text-muted uppercase tracking-wider mb-2">📖 Descrição</p>
-        <p className="text-sm text-text-secondary leading-relaxed whitespace-pre-wrap selectable">
-          {spell.description || <span className="italic opacity-50">Sem descrição cadastrada.</span>}
-        </p>
+        <div className="text-sm text-text-secondary leading-relaxed selectable prose prose-invert prose-p:my-1 prose-ul:my-1 max-w-none">
+          {spell.description ? <ReactMarkdown components={markdownComponents}>{spell.description}</ReactMarkdown> : <span className="italic opacity-50">Sem descrição cadastrada.</span>}
+        </div>
       </div>
     </div>
   );
@@ -986,25 +1010,201 @@ function ItemFilterPanel({ filters, onChange }: ItemFilterPanelProps) {
 }
 
 // =============================================================================
+// Sub-componente: Painel de Filtros para Habilidades
+// =============================================================================
+
+interface AbilityFilters {
+  types: Set<string>;
+}
+
+interface AbilityFilterPanelProps {
+  filters: AbilityFilters;
+  onChange: (filters: AbilityFilters) => void;
+  availableTypes: string[];
+}
+
+function AbilityFilterPanel({ filters, onChange, availableTypes }: AbilityFilterPanelProps) {
+  const toggleSet = <T,>(set: Set<T>, value: T): Set<T> => {
+    const next = new Set(set);
+    if (next.has(value)) next.delete(value);
+    else next.add(value);
+    return next;
+  };
+
+  const hasFilters = filters.types.size > 0;
+
+  return (
+    <div className="flex flex-col gap-4 p-3">
+      {hasFilters && (
+        <button
+          id="ability-filters-clear"
+          onClick={() => onChange({ types: new Set() })}
+          className="text-xs text-crimson-bright hover:text-crimson-muted transition-colors text-left"
+        >
+          ✕ Limpar filtros
+        </button>
+      )}
+
+      <div>
+        <p className="text-[10px] text-text-muted uppercase tracking-wider mb-2">Categoria</p>
+        <div className="flex flex-col gap-1">
+          {availableTypes.length === 0 ? (
+            <span className="text-xs text-text-muted italic">Nenhuma registrada</span>
+          ) : availableTypes.map((type) => (
+            <button
+              key={type}
+              id={`filter-ability-type-${type.toLowerCase().replace(/\s+/g, '-')}`}
+              onClick={() => onChange({ ...filters, types: toggleSet(filters.types, type) })}
+              className={`
+                px-2 py-1 rounded text-xs border text-left transition-all duration-150
+                ${filters.types.has(type)
+                  ? 'bg-codex-surface2 border-gold-dim text-gold-primary'
+                  : 'bg-codex-bg border-codex-border text-text-muted hover:border-codex-surface2 hover:text-text-secondary'
+                }
+              `}
+            >
+              {type}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// =============================================================================
+// Sub-componente: Formulário de Habilidade
+// =============================================================================
+
+interface AbilityFormProps {
+  ability: Ability;
+  onSave: (ability: Ability) => void;
+  onCancel: () => void;
+}
+
+function AbilityForm({ ability: initial, onSave, onCancel }: AbilityFormProps) {
+  const [ability, setAbility] = useState<Ability>(initial);
+  const [customType, setCustomType] = useState(initial.type !== 'Passiva' && initial.type !== 'Ativa' ? initial.type : '');
+
+  const set = <K extends keyof Ability>(key: K, val: Ability[K]) =>
+    setAbility((prev) => ({ ...prev, [key]: val, updatedAt: new Date().toISOString() }));
+
+  const handleTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    if (val === 'custom') {
+      set('type', customType);
+    } else {
+      set('type', val);
+      setCustomType('');
+    }
+  };
+
+  const handleCustomTypeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setCustomType(val);
+    set('type', val);
+  };
+
+  const canSave = ability.name.trim().length > 0 && ability.type.trim().length > 0;
+  const isCustom = ability.type !== 'Passiva' && ability.type !== 'Ativa' && customType !== '';
+
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); if (canSave) onSave(ability); }} className="flex flex-col h-full">
+      <div className="flex items-center justify-between p-4 border-b border-codex-border bg-codex-bg shrink-0">
+        <h2 className="font-heading text-lg text-gold-primary">
+          {initial.name ? `Editar: ${initial.name}` : 'Nova Habilidade'}
+        </h2>
+        <div className="flex gap-2">
+          <button id="ability-form-cancel" type="button" onClick={onCancel} className="btn-secondary text-xs py-1.5">Cancelar</button>
+          <button id="ability-form-save" type="submit" disabled={!canSave} className="btn-primary text-xs py-1.5 disabled:opacity-40 disabled:cursor-not-allowed">Salvar Habilidade</button>
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4">
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[10px] uppercase tracking-wider text-text-muted">Nome da Habilidade *</label>
+          <input type="text" value={ability.name} onChange={(e) => set('name', e.target.value)} placeholder="Ex: Fúria, Visão no Escuro" className="input-medieval text-sm" required autoFocus />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[10px] uppercase tracking-wider text-text-muted">Categoria/Tipo *</label>
+          <div className="flex gap-2">
+            <select value={isCustom ? 'custom' : ability.type} onChange={handleTypeChange} className="input-medieval text-sm shrink-0 w-40">
+              <option value="Passiva">Passiva</option>
+              <option value="Ativa">Ativa</option>
+              <option value="custom">Outro (Customizado)</option>
+            </select>
+            {isCustom && (
+              <input type="text" value={customType} onChange={handleCustomTypeChange} placeholder="Ex: Aura, Reação" className="input-medieval text-sm flex-1" required />
+            )}
+          </div>
+        </div>
+        <div className="flex flex-col gap-1.5 flex-1 min-h-[200px]">
+          <label className="text-[10px] uppercase tracking-wider text-text-muted">Descrição (Suporta Markdown)</label>
+          <textarea value={ability.description} onChange={(e) => set('description', e.target.value)} placeholder="Descreva os efeitos da habilidade..." className="input-medieval text-sm flex-1 resize-none font-mono" />
+        </div>
+      </div>
+    </form>
+  );
+}
+
+// =============================================================================
+// Sub-componente: Detalhes de Habilidade
+// =============================================================================
+
+interface AbilityDetailProps {
+  ability: Ability;
+  onEdit: () => void;
+  onDelete: () => void;
+}
+
+function AbilityDetail({ ability, onEdit, onDelete }: AbilityDetailProps) {
+  return (
+    <div className="flex flex-col h-full bg-codex-surface">
+      <div className="flex items-start justify-between p-5 border-b border-codex-border bg-codex-bg">
+        <div>
+          <h2 className="text-2xl font-heading text-gold-primary leading-tight">{ability.name}</h2>
+          <div className="flex items-center gap-2 mt-2">
+            <span className="badge badge-outline text-emerald-400 border-emerald-800/50">{ability.type}</span>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={onEdit} className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1">✏️ Editar</button>
+          <button onClick={() => { if (window.confirm('Tem certeza que deseja excluir esta habilidade?')) onDelete(); }} className="btn-secondary text-xs px-3 py-1.5 text-crimson-bright hover:bg-crimson-bright/10 border-transparent hover:border-crimson-muted flex items-center gap-1">🗑️ Excluir</button>
+        </div>
+      </div>
+      <div className="p-5 flex-1 overflow-y-auto">
+        <div className="card p-4 flex-1 h-full">
+          <p className="text-[10px] text-text-muted uppercase tracking-wider mb-2">📖 Descrição</p>
+          <div className="text-sm text-text-secondary leading-relaxed selectable prose prose-invert prose-p:my-1 prose-ul:my-1 max-w-none">
+            {ability.description ? <ReactMarkdown components={markdownComponents}>{ability.description}</ReactMarkdown> : <span className="italic opacity-50">Sem descrição cadastrada.</span>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// =============================================================================
 // Componente Principal: CompendiumView
 // =============================================================================
 
-type CompendiumTab = 'spells' | 'items' | 'homebrew';
+type CompendiumTab = 'spells' | 'items' | 'abilities' | 'homebrew';
 type PanelMode = 'view' | 'edit' | 'create';
 
 export default function CompendiumView() {
-  const { spells, items, saveSpell, deleteSpell, saveItem, deleteItem, homebrewSettings, saveHomebrewSettings } = useDatabase();
+  const { spells, items, abilities, saveSpell, deleteSpell, saveItem, deleteItem, saveAbility, deleteAbility, homebrewSettings } = useDatabase();
 
   const [activeTab, setActiveTab] = useState<CompendiumTab>('spells');
 
   // --- Estado de Seleção e Modo ---
   const [selectedSpellId, setSelectedSpellId] = useState<string | null>(null);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [selectedAbilityId, setSelectedAbilityId] = useState<string | null>(null);
   const [panelMode, setPanelMode] = useState<PanelMode>('view');
 
   // Entidades temporárias para criação/edição
   const [editingSpell, setEditingSpell] = useState<Spell | null>(null);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
+  const [editingAbility, setEditingAbility] = useState<Ability | null>(null);
 
   // --- Busca e Filtros ---
   const [searchQuery, setSearchQuery] = useState('');
@@ -1018,6 +1218,16 @@ export default function CompendiumView() {
     rarities: new Set(),
     attunement: null,
   });
+  const [abilityFilters, setAbilityFilters] = useState<AbilityFilters>({
+    types: new Set(),
+  });
+
+  // Tipos únicos de habilidades para o filtro
+  const uniqueAbilityTypes = useMemo(() => {
+    const types = new Set<string>();
+    abilities.forEach(a => types.add(a.type));
+    return Array.from(types).sort();
+  }, [abilities]);
 
   // --- Filtragem Cumulativa de Magias ---
   const filteredSpells = useMemo(() => {
@@ -1053,9 +1263,21 @@ export default function CompendiumView() {
     });
   }, [items, searchQuery, itemFilters]);
 
-  // --- Entidades Selecionadas ---
-  const selectedSpell = spells.find((s) => s.id === selectedSpellId) ?? null;
-  const selectedItem  = items.find((i) => i.id === selectedItemId)   ?? null;
+  // --- Filtragem de Habilidades ---
+  const filteredAbilities = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    return abilities.filter((ability) => {
+      if (q && !ability.name.toLowerCase().includes(q) && !ability.description.toLowerCase().includes(q) && !ability.type.toLowerCase().includes(q)) return false;
+      if (abilityFilters.types.size > 0 && !abilityFilters.types.has(ability.type)) return false;
+      return true;
+    }).sort((a, b) => a.name.localeCompare(b.name));
+  }, [abilities, searchQuery, abilityFilters]);
+
+  // --- Helpers de Renderização ---
+
+  const selectedSpell = useMemo(() => spells.find(s => s.id === selectedSpellId), [spells, selectedSpellId]);
+  const selectedItem = useMemo(() => items.find(i => i.id === selectedItemId), [items, selectedItemId]);
+  const selectedAbility = useMemo(() => abilities.find(a => a.id === selectedAbilityId), [abilities, selectedAbilityId]);
 
   // --- Handlers de Tab ---
   const handleTabChange = (tab: CompendiumTab) => {
@@ -1148,6 +1370,48 @@ export default function CompendiumView() {
     setPanelMode('view');
   };
 
+  // --- Handlers de Habilidade ---
+  const handleNewAbility = () => {
+    setEditingAbility(createEmptyAbility());
+    setSelectedAbilityId(null);
+    setPanelMode('create');
+  };
+
+  const handleEditAbility = () => {
+    if (!selectedAbility) return;
+    setEditingAbility({ ...selectedAbility });
+    setPanelMode('edit');
+  };
+
+  const handleSaveAbility = async (ability: Ability) => {
+    try {
+      const abilityToSave = { ...ability };
+      if (!abilityToSave.id || panelMode === 'create') {
+        abilityToSave.id = typeof crypto !== 'undefined' && crypto.randomUUID 
+          ? crypto.randomUUID() 
+          : `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+      }
+      await saveAbility(abilityToSave);
+      setSelectedAbilityId(abilityToSave.id);
+      setEditingAbility(null);
+      setPanelMode('view');
+    } catch (err) {
+      console.error('[CompendiumView] Falha ao salvar habilidade:', err);
+    }
+  };
+
+  const handleDeleteAbility = async () => {
+    if (!selectedAbilityId) return;
+    await deleteAbility(selectedAbilityId);
+    setSelectedAbilityId(null);
+    setPanelMode('view');
+  };
+
+  const handleCancelAbilityForm = () => {
+    setEditingAbility(null);
+    setPanelMode('view');
+  };
+
   // --- Renderização do Painel Direito ---
   const renderRightPanel = () => {
     if (activeTab === 'homebrew') {
@@ -1185,26 +1449,53 @@ export default function CompendiumView() {
     }
 
     // Tab: items
+    if (activeTab === 'items') {
+      if (panelMode === 'create' || panelMode === 'edit') {
+        return editingItem ? (
+          <ItemForm item={editingItem} onSave={handleSaveItem} onCancel={handleCancelItemForm} />
+        ) : null;
+      }
+      if (selectedItem) {
+        return (
+          <ItemDetail
+            item={selectedItem}
+            onEdit={handleEditItem}
+            onDelete={handleDeleteItem}
+          />
+        );
+      }
+      return (
+        <div className="flex flex-col items-center justify-center h-full text-center px-8 gap-3">
+          <div className="text-5xl opacity-25">⚔️</div>
+          <p className="text-text-muted text-sm">Selecione um item ou crie um novo.</p>
+          <button id="compendium-new-item-empty" onClick={handleNewItem} className="btn-primary text-xs mt-2">
+            + Novo Item
+          </button>
+        </div>
+      );
+    }
+
+    // Tab: abilities
     if (panelMode === 'create' || panelMode === 'edit') {
-      return editingItem ? (
-        <ItemForm item={editingItem} onSave={handleSaveItem} onCancel={handleCancelItemForm} />
+      return editingAbility ? (
+        <AbilityForm ability={editingAbility} onSave={handleSaveAbility} onCancel={handleCancelAbilityForm} />
       ) : null;
     }
-    if (selectedItem) {
+    if (selectedAbility) {
       return (
-        <ItemDetail
-          item={selectedItem}
-          onEdit={handleEditItem}
-          onDelete={handleDeleteItem}
+        <AbilityDetail
+          ability={selectedAbility}
+          onEdit={handleEditAbility}
+          onDelete={handleDeleteAbility}
         />
       );
     }
     return (
       <div className="flex flex-col items-center justify-center h-full text-center px-8 gap-3">
-        <div className="text-5xl opacity-25">⚔️</div>
-        <p className="text-text-muted text-sm">Selecione um item ou crie um novo.</p>
-        <button id="compendium-new-item-empty" onClick={handleNewItem} className="btn-primary text-xs mt-2">
-          + Novo Item
+        <div className="text-5xl opacity-25">⭐</div>
+        <p className="text-text-muted text-sm">Selecione uma habilidade ou crie uma nova.</p>
+        <button id="compendium-new-ability-empty" onClick={handleNewAbility} className="btn-primary text-xs mt-2">
+          + Nova Habilidade
         </button>
       </div>
     );
@@ -1223,12 +1514,14 @@ export default function CompendiumView() {
           </p>
         </div>
 
-        {/* Filtros — só exibe para Magias e Itens; Homebrew tem painel próprio */}
+        {/* Filtros — só exibe para Magias, Itens e Habilidades; Homebrew tem painel próprio */}
         {activeTab !== 'homebrew' && (
           activeTab === 'spells' ? (
             <SpellFilterPanel filters={spellFilters} onChange={setSpellFilters} />
-          ) : (
+          ) : activeTab === 'items' ? (
             <ItemFilterPanel filters={itemFilters} onChange={setItemFilters} />
+          ) : (
+            <AbilityFilterPanel filters={abilityFilters} onChange={setAbilityFilters} availableTypes={uniqueAbilityTypes} />
           )
         )}
         {activeTab === 'homebrew' && (
@@ -1248,13 +1541,13 @@ export default function CompendiumView() {
         <div className="shrink-0 border-b border-codex-border">
           {/* Sub-abas: Magias | Itens | Homebrew */}
           <div className="flex">
-            {(['spells', 'items', 'homebrew'] as const).map((tab) => (
+            {(['spells', 'items', 'abilities', 'homebrew'] as const).map((tab) => (
               <button
                 key={tab}
                 id={`compendium-tab-${tab}`}
                 onClick={() => handleTabChange(tab)}
                 className={`
-                  flex-1 py-3 text-xs font-heading tracking-wide uppercase transition-all duration-150
+                  flex-1 py-2 flex flex-col items-center justify-center gap-1 font-heading tracking-wide uppercase transition-all duration-150
                   ${activeTab === tab
                     ? 'text-gold-primary border-b-2 border-gold-primary bg-codex-surface2'
                     : tab === 'homebrew'
@@ -1263,7 +1556,12 @@ export default function CompendiumView() {
                   }
                 `}
               >
-                {tab === 'spells' ? '✨ Magias' : tab === 'items' ? '⚔️ Itens' : '⚙️ Brew'}
+                <span className="text-sm leading-none">
+                  {tab === 'spells' ? '✨' : tab === 'items' ? '⚔️' : tab === 'abilities' ? '⭐' : '⚙️'}
+                </span>
+                <span className="text-[9px] leading-none text-center px-0.5 break-words w-full">
+                  {tab === 'spells' ? 'Magias' : tab === 'items' ? 'Itens' : tab === 'abilities' ? 'Habilidades' : 'Brew'}
+                </span>
               </button>
             ))}
           </div>
@@ -1280,10 +1578,10 @@ export default function CompendiumView() {
                 className="input-medieval flex-1 text-xs py-1.5"
               />
               <button
-                id={activeTab === 'spells' ? 'compendium-new-spell' : 'compendium-new-item'}
-                onClick={activeTab === 'spells' ? handleNewSpell : handleNewItem}
+                id={activeTab === 'spells' ? 'compendium-new-spell' : activeTab === 'items' ? 'compendium-new-item' : 'compendium-new-ability'}
+                onClick={activeTab === 'spells' ? handleNewSpell : activeTab === 'items' ? handleNewItem : handleNewAbility}
                 className="btn-primary text-xs py-1.5 px-3 shrink-0"
-                title={activeTab === 'spells' ? 'Nova Magia' : 'Novo Item'}
+                title={activeTab === 'spells' ? 'Nova Magia' : activeTab === 'items' ? 'Novo Item' : 'Nova Habilidade'}
               >
                 +
               </button>
@@ -1296,7 +1594,9 @@ export default function CompendiumView() {
               <p className="text-[10px] text-text-muted">
                 {activeTab === 'spells'
                   ? `${filteredSpells.length} de ${spells.length} magia${spells.length !== 1 ? 's' : ''}`
-                  : `${filteredItems.length} de ${items.length} item${items.length !== 1 ? 'ns' : ''}`
+                  : activeTab === 'items'
+                    ? `${filteredItems.length} de ${items.length} item${items.length !== 1 ? 'ns' : ''}`
+                    : `${filteredAbilities.length} de ${abilities.length} habilidade${abilities.length !== 1 ? 's' : ''}`
                 }
               </p>
             </div>
@@ -1349,7 +1649,7 @@ export default function CompendiumView() {
                   })}
                 </div>
               )
-            ) : (
+            ) : activeTab === 'items' ? (
               filteredItems.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-32 gap-2">
                   <p className="text-text-muted text-xs italic">
@@ -1391,7 +1691,45 @@ export default function CompendiumView() {
                   })}
                 </div>
               )
-            )}
+            ) : activeTab === 'abilities' ? (
+              filteredAbilities.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-32 gap-2">
+                  <p className="text-text-muted text-xs italic">
+                    {abilities.length === 0 ? 'Nenhuma habilidade cadastrada.' : 'Nenhuma habilidade encontrada.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="flex flex-col">
+                  {filteredAbilities.map((ability) => {
+                    const isSelected = ability.id === selectedAbilityId && panelMode !== 'create';
+                    return (
+                      <button
+                        key={ability.id}
+                        id={`ability-list-item-${ability.id}`}
+                        onClick={() => { setSelectedAbilityId(ability.id); setPanelMode('view'); setEditingAbility(null); }}
+                        className={`
+                          w-full text-left px-3 py-2.5 border-b border-codex-border
+                          transition-all duration-100 ease-out
+                          ${isSelected
+                            ? 'bg-codex-surface2 border-l-2 border-l-gold-primary'
+                            : 'hover:bg-codex-surface2 border-l-2 border-l-transparent'
+                          }
+                        `}
+                      >
+                        <p className={`text-xs font-medium leading-tight ${isSelected ? 'text-text-primary' : 'text-text-secondary'}`}>
+                          {ability.name}
+                        </p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-[10px] text-emerald-400">
+                            {ability.type}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )
+            ) : null}
           </div>
         )}
         {/* Quando Homebrew ativo, a coluna 2 fica vazia (conteúdo vai para coluna 3) */}

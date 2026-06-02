@@ -234,6 +234,31 @@ export interface Item {
 }
 
 // =============================================================================
+// FASE 2.2 — COMPÊNDIO DE HABILIDADES (v1.2.0)
+// =============================================================================
+
+/**
+ * Categorias de habilidades de D&D 5e ou Homebrew disponíveis no Compêndio.
+ * Aceita string para permitir tipos customizados.
+ */
+export type AbilityType = 'Passiva' | 'Ativa' | string;
+
+/**
+ * Estrutura de uma Habilidade (Feature/Trait) no Compêndio.
+ */
+export interface Ability {
+  id: string;
+  name: string;
+  type: AbilityType;
+  /** Texto descritivo completo da habilidade (suporta Markdown) */
+  description: string;
+  /** Timestamp ISO 8601 de criação */
+  createdAt: string;
+  /** Timestamp ISO 8601 da última modificação */
+  updatedAt: string;
+}
+
+// =============================================================================
 // FASE 3 — RASTREADOR DE COMBATE (fase3.md)
 // =============================================================================
 
@@ -469,6 +494,8 @@ export interface LocalDatabase {
   spells: Spell[];
   /** Itens cadastrados no Compêndio (Fase 2) */
   items: Item[];
+  /** Habilidades cadastradas no Compêndio (v1.2.0) */
+  abilities: Ability[];
   /** Encontro de combate ativo (Fase 3) — null se não houver combate em andamento */
   activeEncounter: ActiveEncounter | null;
   /** Árvore de notas da Enciclopédia de Lore (Fase 4) */
@@ -517,6 +544,11 @@ export interface CodexAPI {
   getItems: () => Promise<Item[]>;
   saveItem: (item: Item) => Promise<{ success: boolean }>;
   deleteItem: (id: string) => Promise<{ success: boolean }>;
+
+  // --- Compêndio: Habilidades (v1.2.0) ---
+  getAbilities: () => Promise<Ability[]>;
+  saveAbility: (ability: Ability) => Promise<{ success: boolean }>;
+  deleteAbility: (id: string) => Promise<{ success: boolean }>;
 
   // --- Rastreador de Combate (Fase 3) ---
   /** Retorna o encontro ativo salvo, ou null se não houver combate em andamento */
