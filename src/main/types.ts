@@ -90,6 +90,30 @@ export interface CharacterSheet {
    * Rastreia de 0 a 3 sucessos e 0 a 3 falhas.
    */
   deathSaves?: { successes: number; failures: number };
+  /**
+   * IDs de Magias vinculadas do Compêndio (v1.2.0).
+   * Armazena apenas referências; os dados reais ficam em spells[].
+   * Campo opcional para retrocompatibilidade.
+   */
+  spellIds?: string[];
+  /**
+   * IDs de Itens vinculados do Compêndio (v1.2.0).
+   * Armazena apenas referências; os dados reais ficam em items[].
+   * Campo opcional para retrocompatibilidade.
+   */
+  itemIds?: string[];
+  /**
+   * IDs de Habilidades vinculadas do Compêndio (v1.2.0).
+   * Armazena apenas referências; os dados reais ficam em abilities[].
+   * Campo opcional para retrocompatibilidade.
+   */
+  abilityIds?: string[];
+  /**
+   * Espaços de Magia por Círculo (v1.2.0). Tracker manual e genérico.
+   * Chave: nível do círculo (1-9). Valor: { total, used }.
+   * Campo opcional — o painel só aparece quando o mestre habilita.
+   */
+  spellSlots?: Record<number, { total: number; used: number }>;
 }
 
 /**

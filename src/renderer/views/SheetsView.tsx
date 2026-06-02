@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
-import { CharacterSheet, Attributes, LoreNode } from '../../main/types';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { CharacterSheet, Attributes, LoreNode, Spell, Item, Ability } from '../../main/types';
 import { useDatabase } from '../context/DatabaseContext';
 import {
   calculateModifier,
@@ -36,6 +36,9 @@ function createEmptySheet(type: 'player' | 'creature'): CharacterSheet {
     notes: '',
     tags: [],
     customMetrics: [],
+    spellIds: [],
+    itemIds: [],
+    abilityIds: [],
     createdAt: now,
     updatedAt: now,
   };
@@ -709,7 +712,6 @@ function SheetForm({ sheet: initialSheet, onSave, onCancel, onAutoSave, loreTree
                         key={i}
                         id={`death-save-success-${i}`}
                         onClick={() => {
-                          const current = sheet.deathSaves?.successes ?? 0;
                           const next = filled ? i : i + 1;
                           const updatedSheet = {
                             ...sheet,
@@ -809,12 +811,421 @@ function SheetForm({ sheet: initialSheet, onSave, onCancel, onAutoSave, loreTree
 
         {/* Backlinks de Lore — Issue #14 */}
         <LoreBacklinksSection sheetId={sheet.id} loreTree={loreTree} />
+
+        {/* Seção do Compêndio — v1.2.0 */}
+        <SheetCompendiumSection
+          sheet={sheet}
+          onUpdate={(patch) => {
+            const updatedSheet = { ...sheet, ...patch, updatedAt: new Date().toISOString() };
+            setSheet(updatedSheet);
+            if (onAutoSave && updatedSheet.name.trim()) onAutoSave(updatedSheet);
+          }}
+          onAutoSave={onAutoSave}
+        />
+
+        {/* Espaços de Magia — v1.2.0 (apenas Personagens) */}
+        {sheet.type === 'player' && (
+          <div className="border-t border-codex-border/40 pt-4 mt-2">
+            <div className="flex items-center justify-between mb-3">
+              <p className="section-title">✨ Espaços de Magia</p>
+              {!sheet.spellSlots && (
+                <button
+                  type="button"
+                  id="spell-slots-enable"
+                  onClick={() => {
+                    const initial: NonNullable<CharacterSheet['spellSlots']> = {};
+                    for (let i = 1; i <= 9; i++) initial[i] = { total: 0, used: 0 };
+                    const updatedSheet = { ...sheet, spellSlots: initial, updatedAt: new Date().toISOString() };
+                    setSheet(updatedSheet);
+                    if (onAutoSave && updatedSheet.name.trim()) onAutoSave(updatedSheet);
+                  }}
+                  className="text-[10px] text-gold-primary hover:text-gold-dim border border-gold-dim/40 hover:border-gold-dim rounded px-2 py-0.5 transition-colors"
+                >
+                  Ativar painel
+                </button>
+              )}
+              {sheet.spellSlots && (
+                <button
+                  type="button"
+                  id="spell-slots-reset"
+                  onClick={() => {
+                    const reset: NonNullable<CharacterSheet['spellSlots']> = {};
+                    for (let i = 1; i <= 9; i++) {
+                      const cur = sheet.spellSlots?.[i] ?? { total: 0, used: 0 };
+                      reset[i] = { total: cur.total, used: 0 };
+                    }
+                    const updatedSheet = { ...sheet, spellSlots: reset, updatedAt: new Date().toISOString() };
+                    setSheet(updatedSheet);
+                    if (onAutoSave && updatedSheet.name.trim()) onAutoSave(updatedSheet);
+                  }}
+                  className="text-[10px] text-text-muted hover:text-gold-primary transition-colors"
+                  title="Restaurar todos os espaços (descanso longo)"
+                >
+                  🔄 Descanso longo
+                </button>
+              )}
+            </div>
+            {sheet.spellSlots ? (
+              <SpellSlotsPanel
+                spellSlots={sheet.spellSlots}
+                onChange={(slots) => {
+                  const updatedSheet = { ...sheet, spellSlots: slots, updatedAt: new Date().toISOString() };
+                  setSheet(updatedSheet);
+                  if (onAutoSave && updatedSheet.name.trim()) onAutoSave(updatedSheet);
+                }}
+                onAutoSave={() => { if (onAutoSave && sheet.name.trim()) onAutoSave({ ...sheet, updatedAt: new Date().toISOString() }); }}
+              />
+            ) : (
+              <p className="text-xs text-text-muted italic">Ative o painel para rastrear espaços de magia por círculo.</p>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-// ---- Sub-componente: Backlinks de Lore (Issue #14) ----
+// ---- Sub-componente: Tracker de Espaços de Magia ----
+
+const SPELL_LEVEL_NAMES: Record<number, string> = {
+  1: '1º Círculo', 2: '2º Círculo', 3: '3º Círculo',
+  4: '4º Círculo', 5: '5º Círculo', 6: '6º Círculo',
+  7: '7º Círculo', 8: '8º Círculo', 9: '9º Círculo',
+};
+
+interface SpellSlotsPanelProps {
+  spellSlots: NonNullable<CharacterSheet['spellSlots']>;
+  onChange: (slots: NonNullable<CharacterSheet['spellSlots']>) => void;
+  onAutoSave?: () => void;
+}
+
+function SpellSlotsPanel({ spellSlots, onChange, onAutoSave }: SpellSlotsPanelProps) {
+  const setTotal = (level: number, raw: string) => {
+    const total = Math.max(0, Math.min(20, parseInt(raw, 10) || 0));
+    const current = spellSlots[level] ?? { total: 0, used: 0 };
+    onChange({ ...spellSlots, [level]: { ...current, total, used: Math.min(current.used, total) } });
+  };
+
+  const toggleUsed = (level: number, idx: number) => {
+    const current = spellSlots[level] ?? { total: 0, used: 0 };
+    // Clicar no slot: se já estava usado, desmarca até aquele slot; se não, marca até aquele slot
+    const newUsed = current.used > idx ? idx : idx + 1;
+    const next = { ...spellSlots, [level]: { ...current, used: newUsed } };
+    onChange(next);
+    if (onAutoSave) onAutoSave();
+  };
+
+  return (
+    <div className="flex flex-col gap-2">
+      {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((level) => {
+        const slot = spellSlots[level] ?? { total: 0, used: 0 };
+        const dots = Array.from({ length: Math.max(slot.total, 0) });
+        return (
+          <div key={level} className="flex items-center gap-2">
+            <span className="text-[10px] text-text-muted w-20 shrink-0">{SPELL_LEVEL_NAMES[level]}</span>
+            <input
+              id={`spell-slot-total-${level}`}
+              type="number"
+              value={slot.total}
+              onChange={(e) => setTotal(level, e.target.value)}
+              className="w-10 text-center bg-transparent border-b border-codex-border text-text-primary text-xs outline-none focus:border-gold-dim [-moz-appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              aria-label={`Total de espaços do ${SPELL_LEVEL_NAMES[level]}`}
+            />
+            <div className="flex gap-1 flex-wrap">
+              {slot.total === 0 ? (
+                <span className="text-[10px] text-text-muted italic">—</span>
+              ) : dots.map((_, idx) => {
+                const used = idx < slot.used;
+                return (
+                  <button
+                    key={idx}
+                    id={`spell-slot-${level}-${idx}`}
+                    type="button"
+                    onClick={() => toggleUsed(level, idx)}
+                    title={used ? 'Clique para restaurar' : 'Clique para gastar'}
+                    className={`w-5 h-5 rounded-full border-2 transition-all duration-150 ${
+                      used
+                        ? 'bg-violet-700 border-violet-500 shadow-[0_0_5px_rgba(139,92,246,0.4)]'
+                        : 'bg-codex-bg border-codex-border hover:border-violet-600'
+                    }`}
+                  />
+                );
+              })}
+            </div>
+            {slot.total > 0 && (
+              <span className="text-[10px] text-text-muted ml-auto">{slot.total - slot.used}/{slot.total}</span>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ---- Sub-componente: Modal de Vínculo com o Compêndio ----
+
+type LinkModalMode = 'spells' | 'items' | 'abilities';
+
+interface CompendiumLinkModalProps {
+  mode: LinkModalMode;
+  linkedIds: string[];
+  onToggle: (id: string) => void;
+  onClose: () => void;
+}
+
+function CompendiumLinkModal({ mode, linkedIds, onToggle, onClose }: CompendiumLinkModalProps) {
+  const { spells, items, abilities } = useDatabase();
+  const [search, setSearch] = useState('');
+
+  const entries: { id: string; name: string; sub: string }[] = useMemo(() => {
+    const q = search.toLowerCase().trim();
+    if (mode === 'spells') {
+      return spells
+        .filter(s => !q || s.name.toLowerCase().includes(q))
+        .map((s) => ({ id: s.id, name: s.name, sub: `${s.school} • Nível ${s.level}` }));
+    }
+    if (mode === 'items') {
+      return items
+        .filter(i => !q || i.name.toLowerCase().includes(q))
+        .map((i) => ({ id: i.id, name: i.name, sub: `${i.type} • ${i.rarity}` }));
+    }
+    return abilities
+      .filter(a => !q || a.name.toLowerCase().includes(q))
+      .map((a) => ({ id: a.id, name: a.name, sub: a.type }));
+  }, [mode, spells, items, abilities, search]);
+
+  const modeLabel = mode === 'spells' ? 'Magia' : mode === 'items' ? 'Item' : 'Habilidade';
+  const modeIcon = mode === 'spells' ? '✨' : mode === 'items' ? '⚔️' : '⭐';
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fade-in"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="bg-codex-surface border border-codex-border rounded-xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-codex-border">
+          <h3 className="font-heading text-gold-primary text-lg">
+            {modeIcon} Vincular {modeLabel} do Compêndio
+          </h3>
+          <button
+            id="compendium-link-modal-close"
+            type="button"
+            onClick={onClose}
+            className="text-text-muted hover:text-text-primary transition-colors text-lg leading-none"
+          >
+            ×
+          </button>
+        </div>
+        {/* Search */}
+        <div className="px-4 py-3 border-b border-codex-border">
+          <input
+            id="compendium-link-modal-search"
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={`Buscar ${modeLabel.toLowerCase()}...`}
+            className="input-medieval text-sm w-full"
+            autoFocus
+          />
+        </div>
+        {/* List */}
+        <div className="flex-1 overflow-y-auto">
+          {entries.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-32 gap-2">
+              <p className="text-text-muted text-xs italic">
+                {search ? `Nenhuma ${modeLabel.toLowerCase()} encontrada.` : `Nenhuma ${modeLabel.toLowerCase()} no Compêndio.`}
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col">
+              {entries.map((entry) => {
+                const linked = linkedIds.includes(entry.id);
+                return (
+                  <button
+                    key={entry.id}
+                    id={`link-modal-item-${entry.id}`}
+                    type="button"
+                    onClick={() => onToggle(entry.id)}
+                    className={`flex items-center gap-3 px-4 py-3 border-b border-codex-border/50 text-left transition-all duration-100 ${
+                      linked
+                        ? 'bg-gold-dim/20 hover:bg-gold-dim/30'
+                        : 'hover:bg-codex-surface2'
+                    }`}
+                  >
+                    <div className={`w-4 h-4 rounded border-2 shrink-0 flex items-center justify-center transition-all ${
+                      linked
+                        ? 'bg-gold-primary border-gold-primary'
+                        : 'border-codex-border'
+                    }`}>
+                      {linked && <span className="text-[10px] text-codex-bg font-bold leading-none">✓</span>}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm font-medium truncate ${linked ? 'text-gold-primary' : 'text-text-secondary'}`}>
+                        {entry.name}
+                      </p>
+                      <p className="text-[10px] text-text-muted truncate">{entry.sub}</p>
+                    </div>
+                    <span className={`text-[10px] shrink-0 ${
+                      linked ? 'text-gold-muted' : 'text-text-muted opacity-0 group-hover:opacity-100'
+                    }`}>
+                      {linked ? 'Vinculado' : '+ Vincular'}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        {/* Footer */}
+        <div className="px-5 py-3 border-t border-codex-border flex items-center justify-between">
+          <span className="text-xs text-text-muted">
+            {linkedIds.length} vinculado{linkedIds.length !== 1 ? 's' : ''}
+          </span>
+          <button
+            id="compendium-link-modal-done"
+            type="button"
+            onClick={onClose}
+            className="btn-primary text-xs py-1.5 px-4"
+          >
+            Concluído
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---- Sub-componente: Seção de Vínculos com o Compêndio ----
+
+interface SheetCompendiumSectionProps {
+  sheet: CharacterSheet;
+  onUpdate: (patch: Partial<CharacterSheet>) => void;
+  onAutoSave?: (sheet: CharacterSheet) => void;
+}
+
+function SheetCompendiumSection({ sheet, onUpdate, onAutoSave }: SheetCompendiumSectionProps) {
+  const { spells, items, abilities } = useDatabase();
+  const [modal, setModal] = useState<LinkModalMode | null>(null);
+
+  const spellIds = sheet.spellIds ?? [];
+  const itemIds = sheet.itemIds ?? [];
+  const abilityIds = sheet.abilityIds ?? [];
+
+  const linkedSpells = useMemo(() => spells.filter(s => spellIds.includes(s.id)), [spells, spellIds]);
+  const linkedItems = useMemo(() => items.filter(i => itemIds.includes(i.id)), [items, itemIds]);
+  const linkedAbilities = useMemo(() => abilities.filter(a => abilityIds.includes(a.id)), [abilities, abilityIds]);
+
+  const handleToggle = useCallback((mode: LinkModalMode, id: string) => {
+    const key = mode === 'spells' ? 'spellIds' : mode === 'items' ? 'itemIds' : 'abilityIds';
+    const current: string[] = (sheet[key] as string[] | undefined) ?? [];
+    const next = current.includes(id) ? current.filter(x => x !== id) : [...current, id];
+    onUpdate({ [key]: next });
+  }, [sheet, onUpdate]);
+
+  const handleUnlink = (mode: LinkModalMode, id: string) => handleToggle(mode, id);
+
+  return (
+    <div className="border-t border-codex-border/40 pt-4 mt-2 flex flex-col gap-5">
+      <p className="section-title">Itens do Compêndio</p>
+
+      {/* --- Magias --- */}
+      <CompendiumSubSection
+        icon="✨"
+        label="Magias"
+        emptyMsg="Nenhuma magia vinculada."
+        onAdd={() => setModal('spells')}
+        items={linkedSpells.map((s: Spell) => ({ id: s.id, name: s.name, sub: `${s.school} • Nível ${s.level}` }))}
+        onRemove={(id) => handleUnlink('spells', id)}
+      />
+
+      {/* --- Itens --- */}
+      <CompendiumSubSection
+        icon="⚔️"
+        label="Itens"
+        emptyMsg="Nenhum item vinculado."
+        onAdd={() => setModal('items')}
+        items={linkedItems.map((i: Item) => ({ id: i.id, name: i.name, sub: `${i.type} • ${i.rarity}` }))}
+        onRemove={(id) => handleUnlink('items', id)}
+      />
+
+      {/* --- Habilidades --- */}
+      <CompendiumSubSection
+        icon="⭐"
+        label="Habilidades"
+        emptyMsg="Nenhuma habilidade vinculada."
+        onAdd={() => setModal('abilities')}
+        items={linkedAbilities.map((a: Ability) => ({ id: a.id, name: a.name, sub: a.type }))}
+        onRemove={(id) => handleUnlink('abilities', id)}
+      />
+
+      {/* Modal de seleção */}
+      {modal && (
+        <CompendiumLinkModal
+          mode={modal}
+          linkedIds={modal === 'spells' ? spellIds : modal === 'items' ? itemIds : abilityIds}
+          onToggle={(id) => handleToggle(modal, id)}
+          onClose={() => {
+            setModal(null);
+            if (onAutoSave && sheet.name.trim()) onAutoSave(sheet);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ---- Sub-sub-componente: Seção individual de vínculos ----
+
+interface CompendiumSubSectionProps {
+  icon: string;
+  label: string;
+  emptyMsg: string;
+  items: { id: string; name: string; sub: string }[];
+  onAdd: () => void;
+  onRemove: (id: string) => void;
+}
+
+function CompendiumSubSection({ icon, label, emptyMsg, items, onAdd, onRemove }: CompendiumSubSectionProps) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-[10px] text-text-muted uppercase tracking-wider">{icon} {label}</p>
+        <button
+          type="button"
+          id={`compendium-link-btn-${label.toLowerCase()}`}
+          onClick={onAdd}
+          className="text-[10px] text-gold-primary hover:text-gold-dim transition-colors border border-gold-dim/40 hover:border-gold-dim rounded px-2 py-0.5"
+        >
+          + Vincular
+        </button>
+      </div>
+      {items.length === 0 ? (
+        <p className="text-xs text-text-muted italic">{emptyMsg}</p>
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          {items.map((item) => (
+            <div key={item.id} className="flex items-center gap-2 bg-codex-bg rounded-md px-3 py-2 border border-codex-border">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-text-secondary truncate">{item.name}</p>
+                <p className="text-[10px] text-text-muted">{item.sub}</p>
+              </div>
+              <button
+                type="button"
+                id={`compendium-unlink-${item.id}`}
+                onClick={() => onRemove(item.id)}
+                className="text-text-muted hover:text-crimson-bright transition-colors text-xs shrink-0"
+                title="Desvincular"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface LoreBacklinksSectionProps {
   sheetId: string;
