@@ -8,6 +8,8 @@ import {
   generateId,
   ATTRIBUTE_LABELS,
   ATTRIBUTE_FULL_NAMES,
+  SCHOOL_COLORS,
+  RARITY_COLORS,
 } from '../utils/dnd5e';
 
 // =============================================================================
@@ -1105,7 +1107,7 @@ interface SheetCompendiumSectionProps {
 }
 
 function SheetCompendiumSection({ sheet, onUpdate, onAutoSave }: SheetCompendiumSectionProps) {
-  const { spells, items, abilities } = useDatabase();
+  const { spells, items, abilities, homebrewSettings } = useDatabase();
   const [modal, setModal] = useState<LinkModalMode | null>(null);
 
   const spellIds = sheet.spellIds ?? [];
@@ -1125,6 +1127,11 @@ function SheetCompendiumSection({ sheet, onUpdate, onAutoSave }: SheetCompendium
 
   const handleUnlink = (mode: LinkModalMode, id: string) => handleToggle(mode, id);
 
+  const handleNavigateToCompendium = (mode: LinkModalMode, id: string) => {
+    localStorage.setItem('codex-compendium-nav', JSON.stringify({ tab: mode, id }));
+    window.dispatchEvent(new CustomEvent('codex-navigate', { detail: { view: 'compendium' } }));
+  };
+
   return (
     <div className="border-t border-codex-border/40 pt-4 mt-2 flex flex-col gap-5">
       <p className="section-title">Itens do Compêndio</p>
@@ -1135,8 +1142,18 @@ function SheetCompendiumSection({ sheet, onUpdate, onAutoSave }: SheetCompendium
         label="Magias"
         emptyMsg="Nenhuma magia vinculada."
         onAdd={() => setModal('spells')}
-        items={linkedSpells.map((s: Spell) => ({ id: s.id, name: s.name, sub: `${s.school} • Nível ${s.level}` }))}
+        items={linkedSpells.map((s: Spell) => {
+          const hbSchool = homebrewSettings?.customMagicSchools?.find(hs => hs.name === s.school);
+          return {
+            id: s.id,
+            name: s.name,
+            sub: `${s.school} • Nível ${s.level}`,
+            subColor: hbSchool ? undefined : (SCHOOL_COLORS[s.school] || ''),
+            subStyle: hbSchool ? { color: hbSchool.color } : undefined
+          };
+        })}
         onRemove={(id) => handleUnlink('spells', id)}
+        onClickItem={(id) => handleNavigateToCompendium('spells', id)}
       />
 
       {/* --- Itens --- */}
@@ -1145,8 +1162,14 @@ function SheetCompendiumSection({ sheet, onUpdate, onAutoSave }: SheetCompendium
         label="Itens"
         emptyMsg="Nenhum item vinculado."
         onAdd={() => setModal('items')}
-        items={linkedItems.map((i: Item) => ({ id: i.id, name: i.name, sub: `${i.type} • ${i.rarity}` }))}
+        items={linkedItems.map((i: Item) => ({
+          id: i.id,
+          name: i.name,
+          sub: `${i.type} • ${i.rarity}`,
+          subColor: RARITY_COLORS[i.rarity]?.split(' ')[0] || ''
+        }))}
         onRemove={(id) => handleUnlink('items', id)}
+        onClickItem={(id) => handleNavigateToCompendium('items', id)}
       />
 
       {/* --- Habilidades --- */}
@@ -1155,8 +1178,14 @@ function SheetCompendiumSection({ sheet, onUpdate, onAutoSave }: SheetCompendium
         label="Habilidades"
         emptyMsg="Nenhuma habilidade vinculada."
         onAdd={() => setModal('abilities')}
-        items={linkedAbilities.map((a: Ability) => ({ id: a.id, name: a.name, sub: a.type }))}
+        items={linkedAbilities.map((a: Ability) => ({
+          id: a.id,
+          name: a.name,
+          sub: a.type,
+          subColor: 'text-emerald-400'
+        }))}
         onRemove={(id) => handleUnlink('abilities', id)}
+        onClickItem={(id) => handleNavigateToCompendium('abilities', id)}
       />
 
       {/* Modal de seleção */}
@@ -1181,12 +1210,13 @@ interface CompendiumSubSectionProps {
   icon: string;
   label: string;
   emptyMsg: string;
-  items: { id: string; name: string; sub: string }[];
+  items: { id: string; name: string; sub: string; subColor?: string; subStyle?: React.CSSProperties }[];
   onAdd: () => void;
   onRemove: (id: string) => void;
+  onClickItem: (id: string) => void;
 }
 
-function CompendiumSubSection({ icon, label, emptyMsg, items, onAdd, onRemove }: CompendiumSubSectionProps) {
+function CompendiumSubSection({ icon, label, emptyMsg, items, onAdd, onRemove, onClickItem }: CompendiumSubSectionProps) {
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
@@ -1205,16 +1235,31 @@ function CompendiumSubSection({ icon, label, emptyMsg, items, onAdd, onRemove }:
       ) : (
         <div className="flex flex-col gap-1.5">
           {items.map((item) => (
-            <div key={item.id} className="flex items-center gap-2 bg-codex-bg rounded-md px-3 py-2 border border-codex-border">
+            <div
+              key={item.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => onClickItem(item.id)}
+              onKeyDown={(e) => e.key === 'Enter' && onClickItem(item.id)}
+              className="flex items-center gap-2 bg-codex-bg rounded-md px-3 py-2 border border-codex-border cursor-pointer hover:border-gold-dim/50 hover:bg-codex-surface2 transition-all group"
+              title={`Abrir ${item.name} no Compêndio`}
+            >
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-text-secondary truncate">{item.name}</p>
-                <p className="text-[10px] text-text-muted">{item.sub}</p>
+                <p className="text-xs font-medium text-text-secondary group-hover:text-text-primary transition-colors truncate">
+                  {item.name}
+                </p>
+                <p className={`text-[10px] truncate ${item.subColor || (!item.subStyle ? 'text-text-muted' : '')}`} style={item.subStyle}>
+                  {item.sub}
+                </p>
               </div>
               <button
                 type="button"
                 id={`compendium-unlink-${item.id}`}
-                onClick={() => onRemove(item.id)}
-                className="text-text-muted hover:text-crimson-bright transition-colors text-xs shrink-0"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRemove(item.id);
+                }}
+                className="text-text-muted hover:text-crimson-bright transition-colors text-xs shrink-0 p-1"
                 title="Desvincular"
               >
                 ×
@@ -1396,6 +1441,9 @@ export default function SheetsView() {
   const [editingSheet, setEditingSheet] = useState<CharacterSheet | null>(null);
   const [filterType, setFilterType] = useState<'all' | 'player' | 'creature'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortOrder, setSortOrder] = useState<
+    'alpha-asc' | 'alpha-desc' | 'hp-desc' | 'hp-asc' | 'ac-desc' | 'ac-asc'
+  >('alpha-asc');
 
   const handleNewSheet = (type: 'player' | 'creature') => {
     setEditingSheet(createEmptySheet(type));
@@ -1462,16 +1510,29 @@ export default function SheetsView() {
     }
   };
 
-  const filteredSheets = sheets
-    .filter((s) => filterType === 'all' || s.type === filterType)
-    .filter((s) => {
-      if (!searchQuery) return true;
-      const q = searchQuery.toLowerCase();
-      const matchesName = s.name.toLowerCase().includes(q);
-      // Busca em tag.name (novo formato objeto { name, color })
-      const matchesTag = (s.tags ?? []).some((tag) => tag.name.includes(q));
-      return matchesName || matchesTag;
-    });
+  const filteredSheets = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    const result = sheets
+      .filter((s) => filterType === 'all' || s.type === filterType)
+      .filter((s) => {
+        if (!q) return true;
+        const matchesName = s.name.toLowerCase().includes(q);
+        const matchesTag = (s.tags ?? []).some((tag) => tag.name.includes(q));
+        const matchesClass = (s.class ?? '').toLowerCase().includes(q);
+        const matchesRace = (s.race ?? '').toLowerCase().includes(q);
+        return matchesName || matchesTag || matchesClass || matchesRace;
+      });
+
+    switch (sortOrder) {
+      case 'alpha-asc':  return result.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+      case 'alpha-desc': return result.sort((a, b) => b.name.localeCompare(a.name, 'pt-BR'));
+      case 'hp-desc':    return result.sort((a, b) => b.hpMax - a.hpMax);
+      case 'hp-asc':     return result.sort((a, b) => a.hpMax - b.hpMax);
+      case 'ac-desc':    return result.sort((a, b) => b.armorClass - a.armorClass);
+      case 'ac-asc':     return result.sort((a, b) => a.armorClass - b.armorClass);
+      default:           return result;
+    }
+  }, [sheets, filterType, searchQuery, sortOrder]);
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -1480,9 +1541,11 @@ export default function SheetsView() {
       <div className="flex flex-col w-72 shrink-0 bg-codex-bg border-r border-codex-border">
 
         {/* Cabeçalho + Botões de Criação */}
-        <div className="p-4 border-b border-codex-border">
-          <h1 className="font-heading text-xl text-gradient-gold mb-3">Fichas</h1>
-          <div className="flex gap-2 mb-3">
+        <div className="p-3 border-b border-codex-border flex flex-col gap-2">
+          <h1 className="font-heading text-xl text-gradient-gold">Fichas</h1>
+
+          {/* Botões de criação */}
+          <div className="flex gap-2">
             <button
               id="sheet-new-player"
               onClick={() => handleNewSheet('player')}
@@ -1500,14 +1563,27 @@ export default function SheetsView() {
           </div>
 
           {/* Busca */}
-          <input
-            id="sheet-search"
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Buscar ficha..."
-            className="input-medieval w-full mb-2 text-xs"
-          />
+          <div className="relative">
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted text-xs pointer-events-none">🔍</span>
+            <input
+              id="sheet-search"
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar por nome, classe, raça, tag..."
+              className="input-medieval w-full text-xs pl-7"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary transition-colors text-xs"
+                aria-label="Limpar busca"
+              >
+                ✕
+              </button>
+            )}
+          </div>
 
           {/* Filtro de Tipo */}
           <div className="flex gap-1">
@@ -1524,9 +1600,33 @@ export default function SheetsView() {
                   }
                 `}
               >
-                {type === 'all' ? 'Todos' : type === 'player' ? 'Personagens' : 'Criaturas'}
+                {type === 'all' ? 'Todos' : type === 'player' ? '⚔️ PJs' : '🐉 NPCs'}
               </button>
             ))}
+          </div>
+
+          {/* Ordenação */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] text-text-muted shrink-0 uppercase tracking-wider">Ordem:</span>
+            <select
+              id="sheet-sort-order"
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value as typeof sortOrder)}
+              className="
+                flex-1 bg-codex-bg border border-codex-border rounded-md text-xs text-text-secondary
+                px-2 py-1 outline-none cursor-pointer
+                hover:border-gold-dim focus:border-gold-dim transition-colors
+                appearance-none
+              "
+              aria-label="Ordenar fichas por"
+            >
+              <option value="alpha-asc">🔤 A → Z</option>
+              <option value="alpha-desc">🔤 Z → A</option>
+              <option value="hp-desc">❤️ Maior PV</option>
+              <option value="hp-asc">❤️ Menor PV</option>
+              <option value="ac-desc">🛡️ Maior CA</option>
+              <option value="ac-asc">🛡️ Menor CA</option>
+            </select>
           </div>
         </div>
 
@@ -1554,14 +1654,17 @@ export default function SheetsView() {
           )}
         </div>
 
-        {/* Contagem */}
-        {sheets.length > 0 && (
-          <div className="px-4 py-2 border-t border-codex-border">
-            <p className="text-text-muted text-xs text-center">
-              {sheets.filter(s => s.type === 'player').length} personagens · {sheets.filter(s => s.type === 'creature').length} criaturas
-            </p>
-          </div>
-        )}
+        {/* Contagem e indicador de filtro ativo */}
+        <div className="px-3 py-2 border-t border-codex-border">
+          <p className="text-text-muted text-[10px] text-center">
+            {filteredSheets.length} de {sheets.length} ficha{sheets.length !== 1 ? 's' : ''}
+            {sheets.length > 0 && (
+              <span className="ml-1 opacity-70">
+                · {sheets.filter(s => s.type === 'player').length}⚔️ {sheets.filter(s => s.type === 'creature').length}🐉
+              </span>
+            )}
+          </p>
+        </div>
       </div>
 
       {/* ---- Coluna Direita: Formulário/Detalhe ---- */}

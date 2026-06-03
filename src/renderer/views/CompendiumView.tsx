@@ -1,8 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Spell, Item, Ability, SpellSchool, ItemType, ItemRarity } from '../../main/types';
 import ReactMarkdown from 'react-markdown';
 import { useDatabase } from '../context/DatabaseContext';
-import { generateId } from '../utils/dnd5e';
+import { generateId, SCHOOL_COLORS, RARITY_COLORS } from '../utils/dnd5e';
 
 // =============================================================================
 // CompendiumView — Módulo de Compêndio (Fase 2)
@@ -44,27 +44,7 @@ const markdownComponents: import('react-markdown').Components = {
   a: ({node, ...props}) => <a className="text-gold-primary hover:text-gold-dim underline transition-colors" {...props} />,
 };
 
-/** Cor de badge para cada raridade de item (tons medievais, sem neons puros) */
-const RARITY_COLORS: Record<ItemRarity, string> = {
-  'Comum':              'text-text-secondary border-codex-border',
-  'Incomum':            'text-emerald-400 border-emerald-800/50',
-  'Raro':               'text-sky-400   border-sky-800/50',
-  'Muito Raro':         'text-violet-400 border-violet-800/50',
-  'Lendário':           'text-gold-primary border-gold-dim',
-  'Artefato':           'text-crimson-bright border-crimson-muted',
-};
-
-/** Cor de destaque para cada escola de magia */
-const SCHOOL_COLORS: Record<SpellSchool, string> = {
-  'Abjuração':    'text-sky-400',
-  'Adivinhação':  'text-violet-400',
-  'Conjuração':   'text-amber-400',
-  'Encantamento': 'text-pink-400',
-  'Evocação':     'text-orange-400',
-  'Ilusão':       'text-teal-400',
-  'Necromancia':  'text-text-secondary',
-  'Transmutação': 'text-emerald-400',
-};
+// Constants removed, now imported from ../utils/dnd5e
 
 function levelLabel(level: number | string): string {
   if (level === 0 || level === '0') return 'Truque';
@@ -1205,6 +1185,26 @@ export default function CompendiumView() {
   const [editingSpell, setEditingSpell] = useState<Spell | null>(null);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [editingAbility, setEditingAbility] = useState<Ability | null>(null);
+
+  // Efeito para navegação externa (Deep Linking)
+  useEffect(() => {
+    try {
+      const navTarget = localStorage.getItem('codex-compendium-nav');
+      if (navTarget) {
+        const { tab, id } = JSON.parse(navTarget);
+        if (tab === 'spells' || tab === 'items' || tab === 'abilities') {
+          setActiveTab(tab);
+          if (tab === 'spells') setSelectedSpellId(id);
+          else if (tab === 'items') setSelectedItemId(id);
+          else if (tab === 'abilities') setSelectedAbilityId(id);
+          setPanelMode('view');
+        }
+        localStorage.removeItem('codex-compendium-nav');
+      }
+    } catch (err) {
+      console.error('[CompendiumView] Erro ao ler nav target:', err);
+    }
+  }, []);
 
   // --- Busca e Filtros ---
   const [searchQuery, setSearchQuery] = useState('');

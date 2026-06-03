@@ -6,7 +6,29 @@
 // As funções são puras (sem efeitos colaterais) e extensamente comentadas.
 // =============================================================================
 
-import { Attributes } from '../../main/types';
+import { Attributes, SpellSchool, ItemRarity } from '../../main/types';
+
+/** Cor de destaque para cada escola de magia padrão */
+export const SCHOOL_COLORS: Record<SpellSchool, string> = {
+  'Abjuração':    'text-sky-400',
+  'Adivinhação':  'text-violet-400',
+  'Conjuração':   'text-amber-400',
+  'Encantamento': 'text-pink-400',
+  'Evocação':     'text-orange-400',
+  'Ilusão':       'text-teal-400',
+  'Necromancia':  'text-text-secondary',
+  'Transmutação': 'text-emerald-400',
+};
+
+/** Cor de badge para cada raridade de item (tons medievais) */
+export const RARITY_COLORS: Record<ItemRarity, string> = {
+  'Comum':              'text-text-secondary border-codex-border',
+  'Incomum':            'text-emerald-400 border-emerald-800/50',
+  'Raro':               'text-sky-400   border-sky-800/50',
+  'Muito Raro':         'text-violet-400 border-violet-800/50',
+  'Lendário':           'text-gold-primary border-gold-dim',
+  'Artefato':           'text-crimson-bright border-crimson-muted',
+};
 
 /**
  * Calcula o modificador de atributo conforme a regra oficial de D&D 5e.
