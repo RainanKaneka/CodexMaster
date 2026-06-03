@@ -22,6 +22,7 @@ function getDeterministicColor(name: string): string {
 
 interface CharacterAvatarProps {
   name: string;
+  avatarUrl?: string;
   color?: string; // Se omitido, calculará determinísticamente
   size?: 'sm' | 'md' | 'lg';
   onClick?: () => void;
@@ -30,6 +31,7 @@ interface CharacterAvatarProps {
 
 export default function CharacterAvatar({
   name,
+  avatarUrl,
   color,
   size = 'md',
   onClick,
@@ -58,7 +60,7 @@ export default function CharacterAvatar({
         ${sizeClasses[size]}
         ${className}
       `}
-      style={{
+      style={avatarUrl ? undefined : {
         backgroundColor: bgColor,
         textShadow: '0px 1px 2px rgba(0,0,0,0.5)',
         boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.1)'
@@ -66,7 +68,11 @@ export default function CharacterAvatar({
       title={name}
       aria-label={`Avatar de ${name}`}
     >
-      {initial}
+      {avatarUrl ? (
+        <img src={avatarUrl} alt={`Avatar de ${name}`} className="w-full h-full object-cover rounded-full" />
+      ) : (
+        initial
+      )}
     </button>
   );
 }

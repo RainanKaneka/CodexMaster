@@ -239,6 +239,7 @@ function PinEditorPanel({ pin, sheets, onFieldChange, onDelete, onClose, isSavin
                 <CharacterAvatar 
                   key={id} 
                   name={char.name} 
+                  avatarUrl={char.avatar}
                   size="md" 
                   onClick={() => setSelectedAvatarId(id)} 
                 />
@@ -350,7 +351,7 @@ function PinEditorPanel({ pin, sheets, onFieldChange, onDelete, onClose, isSavin
                 ✕
               </button>
               <div className="flex items-center gap-4 mb-4 mt-2">
-                <CharacterAvatar name={char.name} size="lg" />
+                <CharacterAvatar name={char.name} avatarUrl={char.avatar} size="lg" />
                 <div>
                   <h3 className="font-heading text-xl text-gold-primary leading-tight">{char.name}</h3>
                   <p className="text-xs text-text-secondary">{char.type === 'player' ? 'Personagem' : 'Criatura'}</p>

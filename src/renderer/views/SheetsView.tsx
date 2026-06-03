@@ -1,6 +1,7 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { CharacterSheet, Attributes, LoreNode, Spell, Item, Ability } from '../../main/types';
 import { useDatabase } from '../context/DatabaseContext';
+import { ImageCropperModal } from '../components/ImageCropperModal';
 import {
   calculateModifier,
   formatModifier,
@@ -11,6 +12,13 @@ import {
   SCHOOL_COLORS,
   RARITY_COLORS,
 } from '../utils/dnd5e';
+
+function getInitials(name: string): string {
+  if (!name || !name.trim()) return '?';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
 
 // =============================================================================
 // SheetsView — Módulo de Fichas (MVP 2.2)
@@ -449,6 +457,8 @@ interface SheetFormProps {
 
 function SheetForm({ sheet: initialSheet, onSave, onCancel, onAutoSave, loreTree = [] }: SheetFormProps) {
   const [sheet, setSheet] = useState<CharacterSheet>(initialSheet);
+  const [cropImageUrl, setCropImageUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [hpCurrentInput, setHpCurrentInput] = useState<string>(String(sheet.hpCurrent));
   const [hpMaxInput, setHpMaxInput] = useState<string>(String(sheet.hpMax));
@@ -481,6 +491,17 @@ function SheetForm({ sheet: initialSheet, onSave, onCancel, onAutoSave, loreTree
       attributes: { ...prev.attributes, [key]: value },
       updatedAt: new Date().toISOString(),
     }));
+  };
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setCropImageUrl(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
   const handleSave = () => {
@@ -538,7 +559,7 @@ function SheetForm({ sheet: initialSheet, onSave, onCancel, onAutoSave, loreTree
   const attrKeys = Object.keys(sheet.attributes) as (keyof Attributes)[];
 
   return (
-    <div
+    <form
       id="sheet-form-panel"
       className="flex flex-col h-full bg-codex-surface border-l border-codex-border overflow-y-auto"
     >
@@ -548,10 +569,11 @@ function SheetForm({ sheet: initialSheet, onSave, onCancel, onAutoSave, loreTree
           {initialSheet.name ? `Editar: ${initialSheet.name}` : 'Nova Ficha'}
         </h2>
         <div className="flex gap-2">
-          <button id="sheet-form-cancel" onClick={onCancel} className="btn-secondary text-xs py-1.5">
+          <button type="button" id="sheet-form-cancel" onClick={onCancel} className="btn-secondary text-xs py-1.5">
             Cancelar
           </button>
           <button
+            type="button"
             id="sheet-form-save"
             onClick={handleSave}
             disabled={!sheet.name.trim()}
@@ -569,6 +591,7 @@ function SheetForm({ sheet: initialSheet, onSave, onCancel, onAutoSave, loreTree
           {(['player', 'creature'] as const).map((type) => (
             <button
               key={type}
+              type="button"
               id={`sheet-type-${type}`}
               onClick={() => updateField('type', type)}
               className={`
@@ -587,20 +610,49 @@ function SheetForm({ sheet: initialSheet, onSave, onCancel, onAutoSave, loreTree
         </div>
 
         {/* Informações Básicas */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="col-span-2">
-            <label htmlFor="sheet-name" className="text-xs text-text-muted block mb-1">Nome *</label>
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-4">
             <input
-              id="sheet-name"
-              type="text"
-              value={sheet.name}
-              onChange={(e) => updateField('name', e.target.value)}
-              placeholder={sheet.type === 'player' ? 'Ex: Aldric, o Paladino' : 'Ex: Dragão Vermelho Adulto'}
-              className="input-medieval"
-              autoFocus
+              type="file"
+              accept="image/*"
+              className="hidden"
+              ref={fileInputRef}
+              onChange={handleAvatarChange}
             />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="relative w-16 h-16 rounded-full bg-codex-surface2 flex items-center justify-center shrink-0 overflow-hidden border-2 border-codex-border/50 hover:border-gold-dim transition-all group"
+              title="Alterar Avatar"
+            >
+              {sheet.avatar ? (
+                <>
+                  <img src={sheet.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-[10px] text-white">
+                    Trocar
+                  </div>
+                </>
+              ) : (
+                <div className="text-text-muted group-hover:text-gold-dim transition-colors flex flex-col items-center justify-center gap-1">
+                  <span className="text-xl leading-none">📷</span>
+                </div>
+              )}
+            </button>
+            <div className="flex-1">
+              <label htmlFor="sheet-name" className="text-xs text-text-muted block mb-1">Nome *</label>
+              <input
+                id="sheet-name"
+                type="text"
+                value={sheet.name}
+                onChange={(e) => updateField('name', e.target.value)}
+                placeholder={sheet.type === 'player' ? 'Ex: Aldric, o Paladino' : 'Ex: Dragão Vermelho Adulto'}
+                className="input-medieval"
+                autoFocus
+              />
+            </div>
           </div>
-          <div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
             <label htmlFor="sheet-class" className="text-xs text-text-muted block mb-1">
               {sheet.type === 'player' ? 'Classe' : 'Tipo de Monstro'}
             </label>
@@ -627,8 +679,9 @@ function SheetForm({ sheet: initialSheet, onSave, onCancel, onAutoSave, loreTree
             />
           </div>
         </div>
+      </div>
 
-        {/* Atributos D&D 5e */}
+      {/* Atributos D&D 5e */}
         <div>
           <p className="section-title mb-3">Atributos</p>
           <div className="grid grid-cols-3 gap-2">
@@ -712,6 +765,7 @@ function SheetForm({ sheet: initialSheet, onSave, onCancel, onAutoSave, loreTree
                     return (
                       <button
                         key={i}
+                        type="button"
                         id={`death-save-success-${i}`}
                         onClick={() => {
                           const next = filled ? i : i + 1;
@@ -743,6 +797,7 @@ function SheetForm({ sheet: initialSheet, onSave, onCancel, onAutoSave, loreTree
                     return (
                       <button
                         key={i}
+                        type="button"
                         id={`death-save-failure-${i}`}
                         onClick={() => {
                           const next = filled ? i : i + 1;
@@ -818,11 +873,9 @@ function SheetForm({ sheet: initialSheet, onSave, onCancel, onAutoSave, loreTree
         <SheetCompendiumSection
           sheet={sheet}
           onUpdate={(patch) => {
-            const updatedSheet = { ...sheet, ...patch, updatedAt: new Date().toISOString() };
-            setSheet(updatedSheet);
-            if (onAutoSave && updatedSheet.name.trim()) onAutoSave(updatedSheet);
+            setSheet((prev) => ({ ...prev, ...patch, updatedAt: new Date().toISOString() }));
           }}
-          onAutoSave={onAutoSave}
+          onAutoSave={(s) => { if (onAutoSave) onAutoSave(s); }}
         />
 
         {/* Espaços de Magia — v1.2.0 (apenas Personagens) */}
@@ -883,7 +936,20 @@ function SheetForm({ sheet: initialSheet, onSave, onCancel, onAutoSave, loreTree
           </div>
         )}
       </div>
-    </div>
+
+      {cropImageUrl && (
+        <ImageCropperModal
+          imageUrl={cropImageUrl}
+          aspectRatio={1}
+          circularCrop={true}
+          onSave={(base64) => {
+            updateField('avatar', base64);
+            setCropImageUrl(null);
+          }}
+          onCancel={() => setCropImageUrl(null)}
+        />
+      )}
+    </form>
   );
 }
 
@@ -1307,6 +1373,7 @@ function LoreBacklinksSection({ sheetId, loreTree }: LoreBacklinksSectionProps) 
           {mentions.map((node) => (
             <button
               key={node.id}
+              type="button"
               id={`backlink-${node.id}`}
               onClick={() => handleNavigateToNote(node.id)}
               className="flex items-center gap-2 text-left text-xs px-2.5 py-1.5 rounded hover:bg-codex-surface2 transition-colors group"
@@ -1350,29 +1417,39 @@ function SheetCard({ sheet, isSelected, onSelect, onDelete }: SheetCardProps) {
       `}
       onClick={onSelect}
     >
-      <div className="flex items-start justify-between mb-2">
+      <div className="flex items-center gap-3 mb-2">
+        {sheet.avatar ? (
+          <img src={sheet.avatar} alt="Avatar" className="w-10 h-10 rounded-full object-cover shrink-0 border border-codex-border/50" />
+        ) : (
+          <div className="w-10 h-10 rounded-full bg-codex-surface2 flex items-center justify-center shrink-0 border border-codex-border/50">
+            <span className="text-text-muted text-xs font-bold">{getInitials(sheet.name)}</span>
+          </div>
+        )}
         <div className="flex-1 min-w-0">
-          <h3 className="font-heading text-text-primary text-sm font-semibold truncate">
-            {sheet.name}
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className="font-heading text-text-primary text-sm font-semibold truncate">
+              {sheet.name}
+            </h3>
+            <div className="flex items-center gap-1.5 ml-2">
+              <span className={sheet.type === 'player' ? 'badge-player' : 'badge-creature'}>
+                {sheet.type === 'player' ? `Nv ${sheet.levelOrCR}` : `ND ${sheet.levelOrCR}`}
+              </span>
+              <button
+                type="button"
+                id={`sheet-delete-${sheet.id}`}
+                onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                className="btn-icon text-xs w-6 h-6 p-0 flex items-center justify-center hover:text-crimson-bright"
+                title="Excluir ficha"
+                aria-label={`Excluir ficha de ${sheet.name}`}
+              >
+                ✕
+              </button>
+            </div>
+          </div>
           <p className="text-text-muted text-xs truncate">
             {[sheet.race, sheet.class].filter(Boolean).join(' · ')}
             {!sheet.race && !sheet.class && (sheet.type === 'player' ? 'Personagem' : 'Criatura')}
           </p>
-        </div>
-        <div className="flex items-center gap-1.5 ml-2">
-          <span className={sheet.type === 'player' ? 'badge-player' : 'badge-creature'}>
-            {sheet.type === 'player' ? `Nv ${sheet.levelOrCR}` : `ND ${sheet.levelOrCR}`}
-          </span>
-          <button
-            id={`sheet-delete-${sheet.id}`}
-            onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            className="btn-icon text-xs w-6 h-6 p-0 flex items-center justify-center hover:text-crimson-bright"
-            title="Excluir ficha"
-            aria-label={`Excluir ficha de ${sheet.name}`}
-          >
-            ✕
-          </button>
         </div>
       </div>
 

@@ -125,6 +125,7 @@ Esta seção lista os requisitos de expansão e melhorias sugeridos por Mestres 
 - [ ] **Markdown:** Habilitar suporte a formatação Markdown na área de descrição das magias.
 - [ ] **Filtros e Ordenação:** Implementar sistema de busca avançada na aba de fichas (ordenar por Nome, Vida Máxima, CA, etc.).
 
+
 #### Módulo de Lore & Diário
 - [ ] **Conexão de Entidades:** Integrar o Diário com o sistema de Lore e Notas.
 - [ ] **Quick View de Fichas:** Exibir uma miniatura da ficha (ou painel flutuante) ao abrir uma nota que contenha a menção de um personagem.
@@ -140,3 +141,16 @@ Esta seção lista os requisitos de expansão e melhorias sugeridos por Mestres 
 - [ ] **Integração AnyDice:** Renderizar os gráficos de probabilidade diretamente na seção de rolagem de Dados.
 - [ ] **Geradores de Tabela:** Refatorar a lógica para permitir a definição de *ranges* (intervalos) precisos em vez de apenas um mínimo/máximo global.
 - [ ] **Geradores Rápidos:** Aprimorar as lógicas e o nível de intuição das ferramentas de geração procedimental.
+
+### 🖼️ Avatares e Ecossistema Visual
+* **Imagens nas Fichas (Opcional):** Adicionar suporte para upload ou link de imagens (avatar/token) nas Fichas de Personagem e Criaturas.
+* **Propagação Visual:** Conectar essa imagem ao resto do sistema. O token/avatar deve aparecer automaticamente:
+  * No Tracker de Combate (ao lado da iniciativa).
+  * Nos Mapas Táticos (permitindo arrastar a ficha para posicionar a imagem).
+  * Na Árvore de Lore (ilustrando as menções ao NPC/Personagem).
+
+### 🗔 Gerenciamento de Área de Trabalho (Workspace)
+* **Sistema de Abas Múltiplas (Estilo Obsidian):** Reformular a navegação para suportar abas horizontais no topo da interface. Permitir que o Mestre abra várias entidades simultaneamente (ex: Fichas, Magias, Notas de Lore) e alterne entre elas sem perder a página anterior.
+* **Janelas Destacáveis (Pop-out / Multi-window):** Utilizar a arquitetura nativa do Electron para permitir que o usuário clique com o botão direito em uma aba e selecione "Abrir em nova janela". 
+  * Isso criará uma janela separada e flutuante no sistema operacional.
+  * Ideal para setups com múltiplos monitores (ex: deixar o Tracker de Combate em uma tela e o Compêndio na outra).  

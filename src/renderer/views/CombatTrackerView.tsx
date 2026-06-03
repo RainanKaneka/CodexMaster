@@ -4,6 +4,13 @@ import { useDatabase } from '../context/DatabaseContext';
 import { calculateModifier } from '../utils/dnd5e';
 
 
+function getInitials(name: string): string {
+  if (!name || !name.trim()) return '?';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 // =============================================================================
 // CombatTrackerView — Rastreador de Combate (Fase 3)
 //
@@ -453,6 +460,15 @@ function CombatantRow({ combatant, sheet, isActive, onHpChange, onSetHp, onSetTe
           </span>
           <span className="text-[8px] text-text-muted uppercase tracking-wider">Init</span>
         </div>
+
+        {/* Avatar (se existir) */}
+        {sheet?.avatar ? (
+          <img src={sheet.avatar} alt="Avatar" className="w-10 h-10 rounded-full object-cover shrink-0 border border-gray-600" />
+        ) : (
+          <div className="w-10 h-10 rounded-full bg-codex-surface2 flex items-center justify-center shrink-0 border border-codex-border/50">
+            <span className="text-text-muted text-xs font-bold">{getInitials(combatant.name)}</span>
+          </div>
+        )}
 
         {/* Nome e tipo */}
         <div className="flex-1 min-w-0">

@@ -114,6 +114,10 @@ export interface CharacterSheet {
    * Campo opcional — o painel só aparece quando o mestre habilita.
    */
   spellSlots?: Record<number, { total: number; used: number }>;
+  /**
+   * Imagem/Token do personagem em formato Base64 (v1.3.0)
+   */
+  avatar?: string;
 }
 
 /**
