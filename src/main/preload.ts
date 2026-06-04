@@ -191,4 +191,24 @@ contextBridge.exposeInMainWorld('codexAPI', {
   /** Retorna a versão atual do app lida pelo processo principal via app.getVersion() */
   getAppVersion: (): Promise<string> =>
     ipcRenderer.invoke('app:getVersion'),
+
+  // --- Auto-Updater ---
+  getChangelog: (): Promise<string> => ipcRenderer.invoke('app:getChangelog'),
+  quitAndInstall: (): Promise<void> => ipcRenderer.invoke('app:quitAndInstall'),
+  onUpdateAvailable: (callback: () => void) => {
+    ipcRenderer.removeAllListeners('updater:update-available');
+    ipcRenderer.on('updater:update-available', () => callback());
+  },
+  onUpdateProgress: (callback: (percent: number) => void) => {
+    ipcRenderer.removeAllListeners('updater:download-progress');
+    ipcRenderer.on('updater:download-progress', (_e, percent) => callback(percent));
+  },
+  onUpdateDownloaded: (callback: () => void) => {
+    ipcRenderer.removeAllListeners('updater:update-downloaded');
+    ipcRenderer.on('updater:update-downloaded', () => callback());
+  },
+  onUpdateError: (callback: (err: string) => void) => {
+    ipcRenderer.removeAllListeners('updater:error');
+    ipcRenderer.on('updater:error', (_e, err) => callback(err));
+  },
 });

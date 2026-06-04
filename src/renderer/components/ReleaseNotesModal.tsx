@@ -4,18 +4,9 @@ import ReactMarkdown from 'react-markdown';
 // =============================================================================
 // ReleaseNotesModal — Modal de Notas de Atualização (Issue #15)
 //
-// Busca o campo `body` do último release do GitHub via API pública e renderiza
-// o Markdown com ReactMarkdown. Abre apenas uma vez por versão usando
-// localStorage('codex-last-version') como flag.
-//
-// Regra: NUNCA abre em ambiente de desenvolvimento para não poluir o fluxo.
+// Busca as notas de atualização via IPC (que consome a API do GitHub no main) e
+// renderiza o Markdown com ReactMarkdown. Abre apenas uma vez por versão.
 // =============================================================================
-
-// ─── Configuração ────────────────────────────────────────────────────────────
-// Substitua pelos valores reais do seu repositório GitHub.
-const GITHUB_OWNER = 'rainankaneka';
-const GITHUB_REPO  = 'codexmaster';
-const RELEASES_API = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`;
 
 // Chave usada para registrar a versão já exibida no localStorage
 const STORAGE_KEY = 'codex-last-version';
@@ -34,41 +25,23 @@ function ReleaseNotesModal({ onClose, currentVersion }: ReleaseNotesModalProps) 
   const [error, setError]       = useState<string | null>(null);
 
   useEffect(() => {
-    const controller = new AbortController();
-    // Timeout de 8s — se a API do GitHub demorar, exibe erro amigável
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    let isMounted = true;
 
-    fetch(RELEASES_API, {
-      signal: controller.signal,
-      headers: { Accept: 'application/vnd.github+json' },
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error(`GitHub API retornou ${res.status}`);
-        return res.json() as Promise<{ body?: string }>;
-      })
-      .then((data) => {
-        setMarkdown(
-          data.body?.trim() ||
-          '_Nenhuma nota de atualização disponível para esta versão._'
-        );
+    window.codexAPI.getChangelog()
+      .then((markdownText) => {
+        if (!isMounted) return;
+        setMarkdown(markdownText);
+        setLoading(false);
       })
       .catch((err: unknown) => {
-        const isAbort = err instanceof DOMException && err.name === 'AbortError';
-        setError(
-          isAbort
-            ? 'A requisição demorou demais. Verifique sua conexão e tente novamente.'
-            : 'Não foi possível carregar as notas de atualização.'
-        );
-        if (!isAbort) console.warn('[ReleaseNotesModal] fetch error:', err);
-      })
-      .finally(() => {
-        clearTimeout(timeoutId);
+        if (!isMounted) return;
+        console.warn('[ReleaseNotesModal] getChangelog error:', err);
+        setError('Não foi possível carregar as notas de atualização.');
         setLoading(false);
       });
 
     return () => {
-      clearTimeout(timeoutId);
-      controller.abort();
+      isMounted = false;
     };
   }, []);
 

@@ -641,6 +641,14 @@ export interface CodexAPI {
    * Retorna a versão atual do aplicativo.
    */
   getAppVersion: () => Promise<string>;
+  
+  // --- Auto-Updater (Issue #15) ---
+  getChangelog: () => Promise<string>;
+  quitAndInstall: () => Promise<void>;
+  onUpdateAvailable: (callback: () => void) => void;
+  onUpdateProgress: (callback: (percent: number) => void) => void;
+  onUpdateDownloaded: (callback: () => void) => void;
+  onUpdateError: (callback: (err: string) => void) => void;
 }
 
 // Declaração global para que o renderer reconheça window.codexAPI com tipagem

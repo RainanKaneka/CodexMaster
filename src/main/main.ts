@@ -149,14 +149,44 @@ function createWindow(): void {
   // Em dev (isDev) o electron-updater é no-op: sem GitHub token não checa.
   // =============================================================================
   mainWindow.webContents.once('did-finish-load', () => {
+    // Escuta os eventos do autoUpdater e repassa via IPC para o renderer
+    autoUpdater.on('update-available', () => {
+      mainWindow?.webContents.send('updater:update-available');
+    });
+
+    autoUpdater.on('download-progress', (progressObj) => {
+      mainWindow?.webContents.send('updater:download-progress', progressObj.percent);
+    });
+
+    autoUpdater.on('update-downloaded', () => {
+      mainWindow?.webContents.send('updater:update-downloaded');
+    });
+
+    autoUpdater.on('error', (err) => {
+      console.error('[AutoUpdater] Erro:', err?.message ?? err);
+      mainWindow?.webContents.send('updater:error', err?.message ?? String(err));
+    });
+
     if (!isDev) {
-      // Log de erros do updater sem crashar o app
-      autoUpdater.on('error', (err) => {
-        console.error('[AutoUpdater] Erro:', err?.message ?? err);
-      });
       autoUpdater.checkForUpdatesAndNotify().catch((err) => {
         console.error('[AutoUpdater] checkForUpdatesAndNotify falhou:', err?.message ?? err);
       });
+    } else {
+      // MOCK PARA DESENVOLVIMENTO: Simula o fluxo de atualização para testes visuais
+      // Descomente ou acione via botão secreto se precisar testar o fluxo em dev.
+      setTimeout(() => {
+        mainWindow?.webContents.send('updater:update-available');
+        let percent = 0;
+        const interval = setInterval(() => {
+          percent += 10;
+          if (percent >= 100) {
+            clearInterval(interval);
+            mainWindow?.webContents.send('updater:update-downloaded');
+          } else {
+            mainWindow?.webContents.send('updater:download-progress', percent);
+          }
+        }, 500);
+      }, 3000);
     }
   });
 
@@ -183,6 +213,42 @@ function createWindow(): void {
 
 /** Retorna a versão atual do app (lida do package.json pelo Electron) */
 ipcMain.handle('app:getVersion', () => app.getVersion());
+
+/** Busca as notas de atualização do GitHub */
+ipcMain.handle('app:getChangelog', () => {
+  return new Promise((resolve) => {
+    const request = net.request('https://api.github.com/repos/RainanKaneka/CodexMaster/releases/latest');
+    request.setHeader('Accept', 'application/vnd.github+json');
+    request.on('response', (response) => {
+      let data = '';
+      response.on('data', (chunk) => {
+        data += chunk;
+      });
+      response.on('end', () => {
+        try {
+          const json = JSON.parse(data);
+          resolve(json.body || '_Nenhuma nota de atualização disponível para esta versão._');
+        } catch (e) {
+          resolve('_Nenhuma nota de atualização disponível para esta versão._');
+        }
+      });
+    });
+    request.on('error', (error) => {
+      console.error('[Changelog] Erro ao buscar notas de atualização:', error);
+      resolve('_Não foi possível carregar as notas de atualização (Verifique sua conexão)._');
+    });
+    request.end();
+  });
+});
+
+/** Instala a atualização */
+ipcMain.handle('app:quitAndInstall', () => {
+  if (!isDev) {
+    autoUpdater.quitAndInstall();
+  } else {
+    console.log('[Dev Mock] autoUpdater.quitAndInstall() chamado.');
+  }
+});
 
 // ----- FICHAS (CharacterSheets) -----
 

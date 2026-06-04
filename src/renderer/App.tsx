@@ -11,6 +11,7 @@ import CampaignDiaryView from './views/CampaignDiaryView';
 import GeneratorsView from './views/GeneratorsView';
 import SettingsView from './views/SettingsView';
 import ReleaseNotesModal, { useReleaseNotes } from './components/ReleaseNotesModal';
+import AutoUpdateOverlay from './components/AutoUpdateOverlay';
 
 // =============================================================================
 // App.tsx — Componente Raiz do CodexMaster
@@ -87,6 +88,7 @@ function AppContent() {
       {showModal && (
         <ReleaseNotesModal currentVersion={currentVersion} onClose={handleClose} />
       )}
+      <AutoUpdateOverlay />
     </div>
   );
 }
