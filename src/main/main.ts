@@ -227,15 +227,24 @@ ipcMain.handle('app:getChangelog', () => {
       response.on('end', () => {
         try {
           const json = JSON.parse(data);
-          resolve(json.body || '_Nenhuma nota de atualização disponível para esta versão._');
+          resolve({
+            version: json.tag_name || 'Desconhecida',
+            body: json.body || '_Nenhuma nota de atualização disponível para esta versão._',
+          });
         } catch (e) {
-          resolve('_Nenhuma nota de atualização disponível para esta versão._');
+          resolve({
+            version: 'Desconhecida',
+            body: '_Nenhuma nota de atualização disponível para esta versão._',
+          });
         }
       });
     });
     request.on('error', (error) => {
       console.error('[Changelog] Erro ao buscar notas de atualização:', error);
-      resolve('_Não foi possível carregar as notas de atualização (Verifique sua conexão)._');
+      resolve({
+        version: 'Erro',
+        body: '_Não foi possível carregar as notas de atualização (Verifique sua conexão)._',
+      });
     });
     request.end();
   });

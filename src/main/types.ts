@@ -643,7 +643,7 @@ export interface CodexAPI {
   getAppVersion: () => Promise<string>;
   
   // --- Auto-Updater (Issue #15) ---
-  getChangelog: () => Promise<string>;
+  getChangelog: () => Promise<{ version: string; body: string }>;
   quitAndInstall: () => Promise<void>;
   onUpdateAvailable: (callback: () => void) => void;
   onUpdateProgress: (callback: (percent: number) => void) => void;

@@ -1,7 +1,7 @@
 {
   "name": "codex-master",
   "productName": "CodexMaster",
-  "version": "1.3.1",
+  "version": "1.4.0",
   "description": "O compêndio definitivo para Mestres de RPG.",
   "main": "dist-electron/main.js",
   "scripts": {

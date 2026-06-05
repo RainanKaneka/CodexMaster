@@ -193,7 +193,7 @@ contextBridge.exposeInMainWorld('codexAPI', {
     ipcRenderer.invoke('app:getVersion'),
 
   // --- Auto-Updater ---
-  getChangelog: (): Promise<string> => ipcRenderer.invoke('app:getChangelog'),
+  getChangelog: (): Promise<{ version: string; body: string }> => ipcRenderer.invoke('app:getChangelog'),
   quitAndInstall: (): Promise<void> => ipcRenderer.invoke('app:quitAndInstall'),
   onUpdateAvailable: (callback: () => void) => {
     ipcRenderer.removeAllListeners('updater:update-available');

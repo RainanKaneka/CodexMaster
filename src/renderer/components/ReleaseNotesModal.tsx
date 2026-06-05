@@ -21,6 +21,7 @@ interface ReleaseNotesModalProps {
 
 function ReleaseNotesModal({ onClose, currentVersion }: ReleaseNotesModalProps) {
   const [markdown, setMarkdown] = useState<string | null>(null);
+  const [fetchedVersion, setFetchedVersion] = useState<string>('');
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
 
@@ -28,9 +29,10 @@ function ReleaseNotesModal({ onClose, currentVersion }: ReleaseNotesModalProps) 
     let isMounted = true;
 
     window.codexAPI.getChangelog()
-      .then((markdownText) => {
+      .then((data) => {
         if (!isMounted) return;
-        setMarkdown(markdownText);
+        setMarkdown(data.body);
+        setFetchedVersion(data.version);
         setLoading(false);
       })
       .catch((err: unknown) => {
@@ -62,7 +64,7 @@ function ReleaseNotesModal({ onClose, currentVersion }: ReleaseNotesModalProps) 
             </p>
             <h2 className="font-heading text-xl text-text-primary">
               CodexMaster{' '}
-              <span className="text-gold-primary">v{currentVersion}</span>
+              <span className="text-gold-primary">{fetchedVersion || `v${currentVersion}`}</span>
             </h2>
           </div>
           <button
