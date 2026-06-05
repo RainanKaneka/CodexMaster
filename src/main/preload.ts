@@ -211,4 +211,12 @@ contextBridge.exposeInMainWorld('codexAPI', {
     ipcRenderer.removeAllListeners('updater:error');
     ipcRenderer.on('updater:error', (_e, err) => callback(err));
   },
+
+  // --- Janelas Destacáveis / Pop-outs (v1.4.0 Lote 3) ---
+  /**
+   * Pede ao processo principal para abrir uma nova BrowserWindow
+   * exibindo a view indicada em modo isolado (sem Sidebar/TabBar).
+   */
+  openPopout: (type: string, entityId?: string, title?: string): Promise<{ success: boolean }> =>
+    ipcRenderer.invoke('window:open-popout', { type, entityId, title }),
 });

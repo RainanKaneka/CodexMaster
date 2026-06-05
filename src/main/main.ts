@@ -777,7 +777,74 @@ ipcMain.handle('lore:importMarkdown', async () => {
 });
 
 // =============================================================================
+// JANELAS DESTACÁVEIS (Pop-out) — v1.4.0 Lote 3
+// =============================================================================
+
+// Previne Garbage Collection das janelas secundárias
+const popoutWindows = new Set<BrowserWindow>();
+
+/**
+ * Abre uma BrowserWindow filho para exibir uma view específica de forma
+ * destacada (pop-out). A janela carrega a mesma URL do app principal, porém
+ * com um hash `#popout?view=<type>&entityId=<id>` que o renderer detecta
+ * para entrar no modo de tela isolada (sem Sidebar/TabBar).
+ *
+ * Canal IPC: 'window:open-popout'
+ * Argumentos: { type: TabType, entityId?: string, title?: string }
+ */
+ipcMain.handle(
+  'window:open-popout',
+  async (_event, { type, entityId, title }: { type: string; entityId?: string; title?: string }) => {
+    console.log('🔵 IPC Popout Acionado:', type, entityId);
+
+    // Monta o hash com os parâmetros para o renderer identificar o modo pop-out
+    const params = new URLSearchParams({ view: type });
+    if (entityId) params.set('entityId', entityId);
+    const hash = `#popout?${params.toString()}`;
+
+    const popout = new BrowserWindow({
+      width: 1024,
+      height: 768,
+      minWidth: 640,
+      minHeight: 480,
+      title: title ?? `CodexMaster — ${type}`,
+      backgroundColor: '#1a1a1a',
+      icon: path.join(__dirname, '../assets/icon.ico'),
+      titleBarStyle: 'hidden',
+      titleBarOverlay: {
+        color: '#1a1a1a',
+        symbolColor: '#a0a0a0',
+        height: 36,
+      },
+      webPreferences: {
+        preload: path.join(__dirname, 'preload.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: false,
+      },
+    });
+
+    popout.setMenu(null);
+
+    // Gerenciamento de ciclo de vida para evitar Garbage Collection
+    popoutWindows.add(popout);
+    popout.on('closed', () => {
+      popoutWindows.delete(popout);
+    });
+
+    if (isDev) {
+      await popout.loadURL(`http://localhost:5173/${hash}`);
+    } else {
+      await popout.loadFile(path.join(__dirname, '../dist/index.html'), { hash });
+    }
+
+    return { success: true };
+  }
+);
+
+// =============================================================================
 // CICLO DE VIDA DO APP
+
 // =============================================================================
 
 protocol.registerSchemesAsPrivileged([

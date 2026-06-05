@@ -649,6 +649,10 @@ export interface CodexAPI {
   onUpdateProgress: (callback: (percent: number) => void) => void;
   onUpdateDownloaded: (callback: () => void) => void;
   onUpdateError: (callback: (err: string) => void) => void;
+
+  // --- Janelas Destacáveis / Pop-outs (v1.4.0 Lote 3) ---
+  /** Abre uma BrowserWindow pop-out exibindo a view indicada em modo isolado */
+  openPopout: (type: string, entityId?: string, title?: string) => Promise<{ success: boolean }>;
 }
 
 // Declaração global para que o renderer reconheça window.codexAPI com tipagem

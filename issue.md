@@ -1,29 +1,34 @@
-# Issue: Propagação Visual de Avatares (v1.3.0 - Lote 2)
+# Issue: Sistema de Abas e Janelas Destacáveis (v1.4.0)
 
 ## Contexto
-No Lote 1 da versão 1.3.0, implementamos com sucesso o upload, recorte (crop) e salvamento de avatares na entidade `CharacterSheet` do nosso banco de dados local. A imagem é armazenada no campo `avatar` como uma string Base64. 
+Atualmente, o CodexMaster opera com uma navegação de visualização única (Single View). Para otimizar o fluxo de trabalho do Mestre de Jogo, precisamos evoluir a interface para um ambiente de "Workspace" multitarefa, inspirado em ferramentas como Obsidian e VS Code.
 
-Agora, precisamos propagar essa identidade visual para o restante do ecossistema do aplicativo (CodexMaster), garantindo que rostos de personagens e criaturas substituam os placeholders genéricos de texto/letras nas views principais.
+O objetivo é permitir a abertura de múltiplas abas simultâneas (Fichas, Itens, Mapas) e oferecer a capacidade nativa do Electron de "destacar" essas abas para novas janelas do sistema operacional.
 
 ## Requisitos de Implementação
 
-### 1. Tracker de Combate (`CombatView.tsx`)
-Atualmente, a lista de iniciativa renderiza cards com informações de PV, CA e pequenos ícones de status.
-* **Objetivo:** Renderizar a imagem do combatente no card da iniciativa.
-* **Regras de UI:** - Inserir o `avatar` à esquerda do Nome.
-  - Utilizar formatação de token circular padrão: `w-10 h-10 rounded-full object-cover border border-gray-600`.
-  - **Fallback:** Se o combatente não possuir o campo `avatar` no banco de dados, manter o layout atual ou renderizar as iniciais do personagem em um círculo com cor de fundo.
+### 1. Gerenciador de Abas (Front-end / React Context)
+* **Objetivo:** Substituir a navegação de estado simples por um gerenciador de abas abertas.
+* **Ação:**
+  - Criar um `TabsContext` (ou Zustand/Redux) para gerenciar um array de objetos `Tab`: `{ id: string, title: string, type: 'sheet' | 'compendium' | 'map' | 'combat', entityId?: string }`.
+  - Manter o estado da aba ativa (`activeTabId`).
+  - Qualquer clique em um item da Sidebar (Lista de NPCs, Mapas, etc.) não deve mais mudar a página inteira, mas sim *adicionar uma nova aba* (ou focar nela, se já estiver aberta).
 
-### 2. Habitantes dos Mapas (`MapView.tsx` ou equivalente)
-Na interface de visualização de mapas/lore, a seção de "Habitantes" renderiza uma lista de entidades vinculadas ao local. Atualmente, a UI exibe apenas círculos coloridos com a letra inicial do personagem.
-* **Objetivo:** Substituir a inicial pela imagem do avatar.
-* **Regras de UI:**
-  - O componente deve verificar se o ID do habitante vinculado possui a propriedade `avatar`.
-  - Se sim, renderizar a imagem circular usando classes do Tailwind (`w-8 h-8` ou `w-10 h-10` dependendo do layout atual, com `rounded-full` e `object-cover`).
-  - Se não, manter o fallback atual (círculo colorido com a inicial).
-  - **Crucial:** A funcionalidade de *tooltip* (que exibe o nome completo da entidade ao passar o mouse por cima do círculo) deve ser mantida intacta, funcionando tanto para a imagem quanto para o fallback de letra.
+### 2. Interface da Barra de Abas (UI)
+* **Objetivo:** Renderizar a navegação visual das abas no topo da tela.
+* **Ação:**
+  - Criar um componente `<TabBar />` fixo no topo da área principal (ao lado ou abaixo da barra de título do aplicativo).
+  - Renderizar os botões das abas com o título truncado, um ícone representando o tipo da entidade, e um botão "X" para fechar a aba.
+  - Implementar scroll horizontal caso existam muitas abas abertas.
+
+### 3. Janelas Destacáveis (Pop-out / Electron IPC)
+* **Objetivo:** Permitir que o Mestre abra entidades em janelas secundárias separadas.
+* **Ação:**
+  - **Front-end:** Adicionar suporte a clique com botão direito (Menu de Contexto) nas abas da `<TabBar />`, com a opção "Abrir em Nova Janela". Isso deve disparar um evento IPC via `window.codexAPI` enviando os dados da aba (tipo e ID).
+  - **Back-end (`main.ts`):** Criar um listener `ipcMain.on('window:open-popout', ...)` que instancia um novo `BrowserWindow`. 
+  - A nova janela deve carregar a rota específica do Front-end (ex: via HashRouter do React) para renderizar *apenas* o componente desejado, ocultando a Sidebar principal nessa janela secundária.
 
 ## Critérios de Aceite
-- O TypeScript não deve acusar erros de tipagem ao ler a propriedade `avatar` (ela já existe como `string | undefined` na interface `CharacterSheet`).
-- A interface não deve quebrar caso o banco de dados carregue fichas antigas sem a propriedade `avatar`.
-- O layout de ambas as views deve se manter responsivo e alinhado após a inserção das imagens.
+- O estado de edição das fichas não pode ser perdido ao alternar entre abas (o formulário deve ser preservado).
+- Fechar todas as abas deve renderizar uma tela vazia amigável (Placeholder).
+- Múltiplas instâncias do aplicativo (janelas destacadas) devem sincronizar os dados lendo do mesmo `db.json` de forma segura.

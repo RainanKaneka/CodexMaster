@@ -1,34 +1,34 @@
-# Issue: Sistema de Auto-Update e Patch Notes (v1.3.1)
+# Issue: Sistema de Abas e Janelas Destacáveis (v1.4.0)
 
 ## Contexto
-O aplicativo atualmente não está realizando o download e a instalação automática de novas versões publicadas no GitHub Releases, forçando os usuários a baixarem o `.exe` manualmente. Além disso, quando o usuário abre uma versão nova, ele não é notificado sobre o que mudou (Patch Notes).
+Atualmente, o CodexMaster opera com uma navegação de visualização única (Single View). Para otimizar o fluxo de trabalho do Mestre de Jogo, precisamos evoluir a interface para um ambiente de "Workspace" multitarefa, inspirado em ferramentas como Obsidian e VS Code.
 
-Precisamos implementar o fluxo completo de atualização utilizando o `electron-updater` e a API do GitHub.
+O objetivo é permitir a abertura de múltiplas abas simultâneas (Fichas, Itens, Mapas) e oferecer a capacidade nativa do Electron de "destacar" essas abas para novas janelas do sistema operacional.
 
 ## Requisitos de Implementação
 
-### 1. Configuração do Auto-Updater (Back-end / main.ts)
-* **Objetivo:** Configurar o aplicativo para verificar atualizações no repositório remoto silenciosamente ao iniciar.
+### 1. Gerenciador de Abas (Front-end / React Context)
+* **Objetivo:** Substituir a navegação de estado simples por um gerenciador de abas abertas.
 * **Ação:**
-  - Importar e configurar o `autoUpdater` do pacote `electron-updater`.
-  - Chamar `autoUpdater.checkForUpdatesAndNotify()` logo após o `app.whenReady()`.
-  - Configurar os eventos do `autoUpdater` (`update-available`, `update-downloaded`) para enviar mensagens via IPC para o Front-end, avisando o usuário sobre o status do download.
-  - Certifique-se de que o `electron-builder` (no `package.json` ou `electron-builder.yml`) possui a configuração de `publish` apontando para o provedor `github` (repositório: `RainanKaneka/CodexMaster`).
+  - Criar um `TabsContext` (ou Zustand/Redux) para gerenciar um array de objetos `Tab`: `{ id: string, title: string, type: 'sheet' | 'compendium' | 'map' | 'combat', entityId?: string }`.
+  - Manter o estado da aba ativa (`activeTabId`).
+  - Qualquer clique em um item da Sidebar (Lista de NPCs, Mapas, etc.) não deve mais mudar a página inteira, mas sim *adicionar uma nova aba* (ou focar nela, se já estiver aberta).
 
-### 2. Busca das Notas de Atualização (Patch Notes)
-* **Objetivo:** Buscar o texto das notas de atualização (Markdown) diretamente do GitHub para exibir no app.
+### 2. Interface da Barra de Abas (UI)
+* **Objetivo:** Renderizar a navegação visual das abas no topo da tela.
 * **Ação:**
-  - Criar um IPC Handler (ex: `ipcMain.handle('get-changelog')`) que faça um fetch na API pública do GitHub: `https://api.github.com/repos/RainanKaneka/CodexMaster/releases/latest`.
-  - O handler deve retornar a propriedade `body` do JSON (que contém o texto em Markdown da release).
+  - Criar um componente `<TabBar />` fixo no topo da área principal (ao lado ou abaixo da barra de título do aplicativo).
+  - Renderizar os botões das abas com o título truncado, um ícone representando o tipo da entidade, e um botão "X" para fechar a aba.
+  - Implementar scroll horizontal caso existam muitas abas abertas.
 
-### 3. Interface de Atualização (Front-end / React)
-* **Objetivo:** Avisar o usuário que há uma atualização sendo baixada, exibir uma barra de progresso e mostrar as notas quando a versão for atualizada.
+### 3. Janelas Destacáveis (Pop-out / Electron IPC)
+* **Objetivo:** Permitir que o Mestre abra entidades em janelas secundárias separadas.
 * **Ação:**
-  - Criar um componente de Modal/Notificação flutuante no `App.tsx` (ou global) que escuta os eventos do IPC de atualização.
-  - **Progresso Visual:** Quando o download começar, exibir uma barra de progresso na tela que se atualiza em tempo real, consumindo os dados do evento `download-progress` (que retorna a porcentagem do arquivo já baixada).
-  - Quando atingir 100%, mudar a interface para um botão de destaque: "Atualização pronta! Reinicie para instalar" que aciona `autoUpdater.quitAndInstall()`.
-  - **Changelog Modal:** Ao iniciar o app, comparar a versão atual (`app.getVersion()`) com uma versão salva no `localStorage`. Se for maior, abrir um modal central de "Novidades da Versão", consumindo a rota `get-changelog` e renderizando o texto do GitHub com o `<ReactMarkdown>`.  
+  - **Front-end:** Adicionar suporte a clique com botão direito (Menu de Contexto) nas abas da `<TabBar />`, com a opção "Abrir em Nova Janela". Isso deve disparar um evento IPC via `window.codexAPI` enviando os dados da aba (tipo e ID).
+  - **Back-end (`main.ts`):** Criar um listener `ipcMain.on('window:open-popout', ...)` que instancia um novo `BrowserWindow`. 
+  - A nova janela deve carregar a rota específica do Front-end (ex: via HashRouter do React) para renderizar *apenas* o componente desejado, ocultando a Sidebar principal nessa janela secundária.
 
 ## Critérios de Aceite
-- O aplicativo não deve "crashar" se estiver offline (tratar erros de rede no `autoUpdater` e no fetch do GitHub).
-- As notas de atualização devem suportar o renderizador Markdown que já utilizamos (com Tailwind).
+- O estado de edição das fichas não pode ser perdido ao alternar entre abas (o formulário deve ser preservado).
+- Fechar todas as abas deve renderizar uma tela vazia amigável (Placeholder).
+- Múltiplas instâncias do aplicativo (janelas destacadas) devem sincronizar os dados lendo do mesmo `db.json` de forma segura.
