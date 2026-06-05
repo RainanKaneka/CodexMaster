@@ -237,7 +237,8 @@ ipcMain.handle('app:getChangelog', () => {
 /** Instala a atualização */
 ipcMain.handle('app:quitAndInstall', () => {
   if (!isDev) {
-    autoUpdater.quitAndInstall();
+    // isSilent = true, isForceRunAfter = true
+    autoUpdater.quitAndInstall(true, true);
   } else {
     console.log('[Dev Mock] autoUpdater.quitAndInstall() chamado.');
   }
