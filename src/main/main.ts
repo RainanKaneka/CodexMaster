@@ -171,22 +171,6 @@ function createWindow(): void {
       autoUpdater.checkForUpdatesAndNotify().catch((err) => {
         console.error('[AutoUpdater] checkForUpdatesAndNotify falhou:', err?.message ?? err);
       });
-    } else {
-      // MOCK PARA DESENVOLVIMENTO: Simula o fluxo de atualização para testes visuais
-      // Descomente ou acione via botão secreto se precisar testar o fluxo em dev.
-      setTimeout(() => {
-        mainWindow?.webContents.send('updater:update-available');
-        let percent = 0;
-        const interval = setInterval(() => {
-          percent += 10;
-          if (percent >= 100) {
-            clearInterval(interval);
-            mainWindow?.webContents.send('updater:update-downloaded');
-          } else {
-            mainWindow?.webContents.send('updater:download-progress', percent);
-          }
-        }, 500);
-      }, 3000);
     }
   });
 
