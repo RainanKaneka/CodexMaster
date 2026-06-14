@@ -619,25 +619,27 @@ function SheetForm({ sheet: initialSheet, onSave, onCancel, onAutoSave, loreTree
               ref={fileInputRef}
               onChange={handleAvatarChange}
             />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="relative w-16 h-16 rounded-full bg-codex-surface2 flex items-center justify-center shrink-0 overflow-hidden border-2 border-codex-border/50 hover:border-gold-dim transition-all group"
-              title="Alterar Avatar"
-            >
-              {sheet.avatar ? (
-                <>
-                  <img src={sheet.avatar} alt="Avatar" className="w-full h-full object-cover" />
-                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-[10px] text-white">
-                    Trocar
+            <div className="relative flex items-center justify-center shrink-0">
+              <button
+                type="button"
+                onClick={() => sheet.avatar ? setCropImageUrl(sheet.originalAvatar || sheet.avatar) : fileInputRef.current?.click()}
+                className="relative w-16 h-16 rounded-full bg-codex-surface2 flex items-center justify-center overflow-hidden border-2 border-codex-border/50 hover:border-gold-dim transition-all cursor-pointer group"
+                title={sheet.avatar ? "Reenquadrar Avatar" : "Adicionar Avatar"}
+              >
+                {sheet.avatar ? (
+                  <>
+                    <img src={sheet.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-[10px] text-white">
+                      Editar
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-text-muted group-hover:text-gold-dim transition-colors flex flex-col items-center justify-center gap-1">
+                    <span className="text-xl leading-none">📷</span>
                   </div>
-                </>
-              ) : (
-                <div className="text-text-muted group-hover:text-gold-dim transition-colors flex flex-col items-center justify-center gap-1">
-                  <span className="text-xl leading-none">📷</span>
-                </div>
-              )}
-            </button>
+                )}
+              </button>
+            </div>
             <div className="flex-1">
               <label htmlFor="sheet-name" className="text-xs text-text-muted block mb-1">Nome *</label>
               <input
@@ -940,10 +942,17 @@ function SheetForm({ sheet: initialSheet, onSave, onCancel, onAutoSave, loreTree
       {cropImageUrl && (
         <ImageCropperModal
           imageUrl={cropImageUrl}
+          initialCropData={sheet.avatarCropData}
           aspectRatio={1}
           circularCrop={true}
-          onSave={(base64) => {
-            updateField('avatar', base64);
+          onSave={(cropped, original, cropData) => {
+            setSheet((prev) => ({
+              ...prev,
+              avatar: cropped,
+              originalAvatar: original,
+              avatarCropData: cropData,
+              updatedAt: new Date().toISOString()
+            }));
             setCropImageUrl(null);
           }}
           onCancel={() => setCropImageUrl(null)}

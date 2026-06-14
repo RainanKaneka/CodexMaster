@@ -841,7 +841,7 @@ export default function LoreEncyclopediaView() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Configuração do modal de recorte
-  const [cropConfig, setCropConfig] = useState<{ field: 'iconPath' | 'coverImagePath', imageUrl: string } | null>(null);
+  const [cropConfig, setCropConfig] = useState<{ field: 'iconPath' | 'coverImagePath', imageUrl: string, initialCropData?: any } | null>(null);
 
   // Persistência das pastas da árvore expandidas
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(() => {
@@ -902,7 +902,12 @@ export default function LoreEncyclopediaView() {
   // Resolve URLs quando um nó é selecionado
   useEffect(() => {
     if (!selectedNode) return;
-    const paths = [selectedNode.iconPath, selectedNode.coverImagePath].filter(Boolean) as string[];
+    const paths = [
+      selectedNode.iconPath, 
+      selectedNode.coverImagePath, 
+      selectedNode.originalIcon, 
+      selectedNode.originalCover
+    ].filter(Boolean) as string[];
     paths.forEach((p) => {
       if (!mediaUrls[p]) resolveMediaUrl(p);
     });
@@ -1208,13 +1213,15 @@ export default function LoreEncyclopediaView() {
     const base64 = await window.codexAPI.readImageAsBase64(srcPath);
     if (!base64) return;
     
-    setCropConfig({ field, imageUrl: base64 });
+    // Quando seleciona uma nova, limpa o initialCropData
+    setCropConfig({ field, imageUrl: base64, initialCropData: undefined });
   }, [selectedNode]);
 
-  const handleSaveCrop = useCallback(async (base64Cropped: string) => {
+  const handleSaveCrop = useCallback(async (base64Cropped: string, _base64Original: string, _cropData: any) => {
     if (!selectedNode || !cropConfig) return;
     const { field } = cropConfig;
-    const prefix = field === 'iconPath' ? 'icon' : 'cover';
+    const isIcon = field === 'iconPath';
+    const prefix = isIcon ? 'icon' : 'cover';
     
     const relativePath = await window.codexAPI.saveCroppedImage(base64Cropped, prefix);
     if (!relativePath) {
@@ -1222,6 +1229,14 @@ export default function LoreEncyclopediaView() {
       return;
     }
     
+    let originalRelativePath = isIcon ? selectedNode.originalIcon : selectedNode.originalCover;
+    if (_base64Original.startsWith('data:image/')) {
+      const savedOriginal = await window.codexAPI.saveCroppedImage(_base64Original, `${prefix}_original`);
+      if (savedOriginal) originalRelativePath = savedOriginal;
+    } else if (!originalRelativePath) {
+      originalRelativePath = selectedNode[field] as string | null;
+    }
+
     // Resolve a URL imediatamente para exibição na UI
     const url = await window.codexAPI.readMediaFileAsUrl(relativePath);
     if (url) setMediaUrls((prev) => ({ ...prev, [relativePath]: url }));
@@ -1229,6 +1244,10 @@ export default function LoreEncyclopediaView() {
     const updated: LoreNode = {
       ...selectedNode,
       [field]: relativePath,
+      ...(isIcon 
+        ? { originalIcon: originalRelativePath, iconCropData: _cropData } 
+        : { originalCover: originalRelativePath, coverCropData: _cropData }
+      ),
       updatedAt: new Date().toISOString(),
     };
     await saveLoreNode(updated);
@@ -1308,6 +1327,8 @@ export default function LoreEncyclopediaView() {
 
   const coverUrl = selectedNode?.coverImagePath ? mediaUrls[selectedNode.coverImagePath] : null;
   const iconUrl = selectedNode?.iconPath ? mediaUrls[selectedNode.iconPath] : null;
+  const originalCoverUrl = selectedNode?.originalCover ? mediaUrls[selectedNode.originalCover] : coverUrl;
+  const originalIconUrl = selectedNode?.originalIcon ? mediaUrls[selectedNode.originalIcon] : iconUrl;
 
   return (
     <div id="lore-view" className="flex h-full overflow-hidden bg-codex-bg">
@@ -1468,16 +1489,31 @@ export default function LoreEncyclopediaView() {
               {/* Ícone */}
               <div className="flex items-center gap-2">
                 {iconUrl ? (
-                  <img src={iconUrl} alt="Ícone" className="w-8 h-8 rounded-full object-cover border border-gold-dim" />
+                  <div className="relative group flex items-center justify-center shrink-0">
+                    <img 
+                      src={iconUrl} 
+                      alt="Ícone" 
+                      className="w-8 h-8 rounded-full object-cover border border-gold-dim" 
+                    />
+                  </div>
                 ) : (
                   <div className="w-8 h-8 rounded-full bg-codex-surface border border-codex-border flex items-center justify-center text-xs text-text-muted">🖼</div>
+                )}
+                {iconUrl && (
+                  <button
+                    onClick={() => setCropConfig({ field: 'iconPath', imageUrl: originalIconUrl || iconUrl!, initialCropData: selectedNode?.iconCropData })}
+                    className="text-xs text-gold-primary hover:text-gold-muted transition-colors mr-1"
+                    title="Reenquadrar ícone"
+                  >
+                    ✂️ Ajustar
+                  </button>
                 )}
                 <button
                   id="lore-upload-icon"
                   onClick={() => handleUploadMedia('iconPath')}
                   className="text-xs text-text-muted hover:text-gold-primary transition-colors"
                 >
-                  {iconUrl ? 'Alterar ícone' : '+ Ícone'}
+                  {iconUrl ? 'Trocar arquivo' : '+ Ícone'}
                 </button>
               </div>
 
@@ -1486,16 +1522,31 @@ export default function LoreEncyclopediaView() {
               {/* Imagem de Capa */}
               <div className="flex items-center gap-2">
                 {coverUrl ? (
-                  <img src={coverUrl} alt="Capa" className="h-8 w-16 rounded object-cover border border-codex-border" />
+                  <div className="relative group flex items-center justify-center shrink-0">
+                    <img 
+                      src={coverUrl} 
+                      alt="Capa" 
+                      className="h-8 w-16 rounded object-cover border border-codex-border" 
+                    />
+                  </div>
                 ) : (
                   <div className="h-8 w-16 rounded bg-codex-surface border border-codex-border flex items-center justify-center text-xs text-text-muted">🖼</div>
+                )}
+                {coverUrl && (
+                  <button
+                    onClick={() => setCropConfig({ field: 'coverImagePath', imageUrl: originalCoverUrl || coverUrl!, initialCropData: selectedNode?.coverCropData })}
+                    className="text-xs text-gold-primary hover:text-gold-muted transition-colors mr-1"
+                    title="Reenquadrar capa"
+                  >
+                    ✂️ Ajustar
+                  </button>
                 )}
                 <button
                   id="lore-upload-cover"
                   onClick={() => handleUploadMedia('coverImagePath')}
                   className="text-xs text-text-muted hover:text-gold-primary transition-colors"
                 >
-                  {coverUrl ? 'Alterar capa' : '+ Capa'}
+                  {coverUrl ? 'Trocar arquivo' : '+ Capa'}
                 </button>
               </div>
             </div>
@@ -1641,8 +1692,10 @@ export default function LoreEncyclopediaView() {
       {cropConfig && (
         <ImageCropperModal
           imageUrl={cropConfig.imageUrl}
-          aspectRatio={cropConfig.field === 'coverImagePath' ? 16 / 9 : 1}
+          initialCropData={cropConfig.initialCropData}
+          aspectRatio={cropConfig.field === 'iconPath' ? 1 : 16 / 9}
           circularCrop={cropConfig.field === 'iconPath'}
+          imageType={cropConfig.field === 'iconPath' ? 'image/png' : 'image/webp'}
           onSave={handleSaveCrop}
           onCancel={() => setCropConfig(null)}
         />

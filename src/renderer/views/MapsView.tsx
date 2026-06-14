@@ -3,6 +3,7 @@ import { MapData, MapPin, CharacterSheet } from '../../main/types';
 import { useDatabase } from '../context/DatabaseContext';
 import { generateId } from '../utils/dnd5e';
 import CharacterAvatar from '../components/CharacterAvatar';
+import { ImageCropperModal } from '../components/ImageCropperModal';
 
 // =============================================================================
 // MapsView — Módulo de Mapas Interativos (Issue #5: Painel de Edição Lateral)
@@ -399,6 +400,9 @@ export default function MapsView() {
   const [selectedPinId, setSelectedPinId] = useState<string | null>(null);
   const [isLoadingImage, setIsLoadingImage] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [cropImageUrl, setCropImageUrl] = useState<string | null>(null);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editName, setEditName] = useState('');
   
   // Persiste a preferência de mostrar rótulos no localStorage
   const [showLabels, setShowLabels] = useState(() => {
@@ -415,6 +419,16 @@ export default function MapsView() {
 
   const selectedMap = maps.find((m) => m.id === selectedMapId) ?? null;
   const selectedPin = selectedMap?.pins.find((p) => p.id === selectedPinId) ?? null;
+
+  const handleSaveName = async () => {
+    if (!selectedMap || !editName.trim() || editName.trim() === selectedMap.name) {
+      setIsEditingName(false);
+      return;
+    }
+    const updatedMap: MapData = { ...selectedMap, name: editName.trim(), updatedAt: new Date().toISOString() };
+    await saveMap(updatedMap);
+    setIsEditingName(false);
+  };
 
   // Carrega um novo mapa via dialog nativo do Electron
   const handleLoadMap = async () => {
@@ -435,6 +449,7 @@ export default function MapsView() {
         name: fileName,
         filePath,
         imageBase64,
+        originalImageBase64: imageBase64,
         pins: [],
         createdAt: now,
         updatedAt: now,
@@ -607,7 +622,36 @@ export default function MapsView() {
             {/* Barra de Info do Mapa */}
             <div className="flex items-center justify-between px-4 py-2 border-b border-codex-border bg-codex-surface shrink-0">
               <div>
-                <h2 className="font-heading text-sm text-text-primary">{selectedMap.name}</h2>
+                {isEditingName ? (
+                  <div className="flex items-center gap-2 mb-1">
+                    <input
+                      type="text"
+                      autoFocus
+                      className="input-medieval text-sm py-0.5 px-1.5 h-6 w-48"
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleSaveName();
+                        if (e.key === 'Escape') setIsEditingName(false);
+                      }}
+                      onBlur={handleSaveName}
+                    />
+                  </div>
+                ) : (
+                  <h2 className="font-heading text-sm text-text-primary group flex items-center gap-2 mb-0.5">
+                    {selectedMap.name}
+                    <button
+                      onClick={() => {
+                        setEditName(selectedMap.name);
+                        setIsEditingName(true);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 text-[10px] text-text-muted hover:text-gold-primary transition-all"
+                      title="Renomear Mapa"
+                    >
+                      ✏️
+                    </button>
+                  </h2>
+                )}
                 <p className="text-[10px] text-text-muted">
                   {selectedMap.pins.length} pin{selectedMap.pins.length !== 1 ? 's' : ''}
                   {' · '}
@@ -622,6 +666,14 @@ export default function MapsView() {
                 >
                   <span className="text-sm">👁️</span>
                   {showLabels ? 'Ocultar Nomes' : 'Mostrar Nomes'}
+                </button>
+                <button
+                  onClick={() => setCropImageUrl(selectedMap.originalImageBase64 || selectedMap.imageBase64!)}
+                  className="btn-secondary flex items-center gap-1.5 text-xs py-1 px-2.5 transition-colors opacity-70 hover:opacity-100"
+                  title="Reenquadrar a imagem do mapa"
+                >
+                  <span className="text-sm">✂️</span>
+                  Ajustar Fundo
                 </button>
                 {isPanelOpen && (
                   <span className="text-xs text-gold-primary animate-pulse-gold whitespace-nowrap">
@@ -652,7 +704,6 @@ export default function MapsView() {
                     alt={`Mapa: ${selectedMap.name}`}
                     className="max-w-full max-h-[calc(100vh-160px)] rounded-lg border border-codex-border shadow-lg"
                     draggable={false}
-                    style={{ pointerEvents: 'none' }}
                   />
 
                   {/* Pins sobrepostos */}
@@ -702,6 +753,21 @@ export default function MapsView() {
           </div>
         )}
       </div>
+
+      {cropImageUrl && selectedMap && (
+        <ImageCropperModal
+          imageUrl={cropImageUrl}
+          initialCropData={selectedMap.mapCropData}
+          imageType="image/webp"
+          imageQuality={0.8}
+          onSave={async (cropped, original, cropData) => {
+            const updatedMap: MapData = { ...selectedMap, imageBase64: cropped, originalImageBase64: original, mapCropData: cropData, updatedAt: new Date().toISOString() };
+            await saveMap(updatedMap);
+            setCropImageUrl(null);
+          }}
+          onCancel={() => setCropImageUrl(null)}
+        />
+      )}
     </div>
   );
 }

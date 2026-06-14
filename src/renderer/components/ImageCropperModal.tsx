@@ -4,25 +4,40 @@ import 'react-image-crop/dist/ReactCrop.css';
 
 interface ImageCropperModalProps {
   imageUrl: string;
+  initialCropData?: any;
   aspectRatio?: number;
   circularCrop?: boolean;
-  onSave: (base64: string) => void;
+  onSave: (croppedBase64: string, originalRawBase64: string, cropData: any) => void;
   onCancel: () => void;
+  imageType?: 'image/png' | 'image/webp' | 'image/jpeg';
+  imageQuality?: number;
 }
 
 export function ImageCropperModal({
   imageUrl,
+  initialCropData,
   aspectRatio,
   circularCrop,
   onSave,
   onCancel,
+  imageType = 'image/png',
+  imageQuality
 }: ImageCropperModalProps) {
   const [crop, setCrop] = useState<Crop>();
   const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
+  const [localImageUrl, setLocalImageUrl] = useState(imageUrl);
   const imgRef = useRef<HTMLImageElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const onImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const { width, height } = e.currentTarget;
+
+    if (initialCropData && localImageUrl === imageUrl) {
+      setCrop(initialCropData);
+      setCompletedCrop(initialCropData);
+      return;
+    }
+
     let initialCrop: Crop;
     
     if (aspectRatio) {
@@ -88,8 +103,21 @@ export function ImageCropperModal({
       canvas.height
     );
 
-    const base64 = canvas.toDataURL('image/png');
-    onSave(base64);
+    const quality = imageQuality !== undefined ? imageQuality : (imageType === 'image/png' ? undefined : 0.8);
+    const base64 = canvas.toDataURL(imageType, quality);
+    onSave(base64, localImageUrl, completedCrop);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const reader = new FileReader();
+      reader.addEventListener('load', () => {
+        if (typeof reader.result === 'string') {
+          setLocalImageUrl(reader.result);
+        }
+      });
+      reader.readAsDataURL(e.target.files[0]);
+    }
   };
 
   return (
@@ -108,7 +136,7 @@ export function ImageCropperModal({
           >
             <img
               ref={imgRef}
-              src={imageUrl}
+              src={localImageUrl}
               alt="Crop"
               style={{ maxHeight: '58vh', maxWidth: '100%', objectFit: 'contain', display: 'block' }}
               onLoad={onImageLoad}
@@ -117,8 +145,24 @@ export function ImageCropperModal({
           </ReactCrop>
         </div>
         
-        <div className="flex gap-3 justify-end mt-5 shrink-0">
-          <button onClick={onCancel} className="btn-secondary py-2 px-4">Cancelar</button>
+        <div className="flex justify-end gap-3 px-6 py-4 border-t border-codex-border bg-codex-bg">
+          <input 
+            type="file" 
+            accept="image/*" 
+            className="hidden" 
+            ref={fileInputRef} 
+            onChange={handleFileChange} 
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="btn-secondary mr-auto"
+          >
+            Trocar Imagem
+          </button>
+          <button
+            type="button"
+            onClick={onCancel} className="btn-secondary py-2 px-4">Cancelar</button>
           <button onClick={handleSave} className="btn-primary py-2 px-6" disabled={!completedCrop}>
             💾 Salvar Enquadramento
           </button>

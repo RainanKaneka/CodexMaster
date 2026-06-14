@@ -118,6 +118,14 @@ export interface CharacterSheet {
    * Imagem/Token do personagem em formato Base64 (v1.3.0)
    */
   avatar?: string;
+  /**
+   * Imagem original sem recortes (Non-destructive cropping)
+   */
+  originalAvatar?: string;
+  /**
+   * Dados de estado do corte (para manter a memória do reenquadramento)
+   */
+  avatarCropData?: any;
 }
 
 /**
@@ -155,6 +163,10 @@ export interface MapData {
   filePath: string;
   /** Imagem em Base64 para ser renderizada no renderer sem acesso direto ao fs */
   imageBase64?: string;
+  /** Imagem original sem recortes do Mapa (Non-destructive cropping) */
+  originalImageBase64?: string;
+  /** Dados de estado do corte do Mapa (para manter a memória do reenquadramento) */
+  mapCropData?: any;
   pins: MapPin[];
   /** Timestamp ISO 8601 de criação */
   createdAt: string;
@@ -422,6 +434,16 @@ export interface LoreNode {
   iconPath?: string | null;
   /** Caminho relativo da imagem de capa/banner da nota (ex: "media/cover_123.jpg") */
   coverImagePath?: string | null;
+  
+  /** Imagem original do ícone sem recortes (caminho relativo) */
+  originalIcon?: string | null;
+  /** Dados matemáticos do corte do ícone */
+  iconCropData?: any;
+  /** Imagem original da capa sem recortes (caminho relativo) */
+  originalCover?: string | null;
+  /** Dados matemáticos do corte da capa */
+  coverCropData?: any;
+  
   /** Timestamp ISO 8601 de criação */
   createdAt: string;
   /** Timestamp ISO 8601 da última modificação */

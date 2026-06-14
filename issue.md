@@ -1,34 +1,25 @@
-# Issue: Sistema de Abas e Janelas Destacáveis (v1.4.0)
+# Issue: Melhorias no Módulo de Mapas, Combate e Gestão Global de Imagens (v1.5.0)
 
 ## Contexto
-Atualmente, o CodexMaster opera com uma navegação de visualização única (Single View). Para otimizar o fluxo de trabalho do Mestre de Jogo, precisamos evoluir a interface para um ambiente de "Workspace" multitarefa, inspirado em ferramentas como Obsidian e VS Code.
-
-O objetivo é permitir a abertura de múltiplas abas simultâneas (Fichas, Itens, Mapas) e oferecer a capacidade nativa do Electron de "destacar" essas abas para novas janelas do sistema operacional.
+A versão 1.5.0 foca em qualidade de vida (QoL) para o Mestre durante a sessão. O objetivo é otimizar a gestão de recursos visuais (imagens, zoom e reenquadramento) e acelerar o fluxo de jogo com a leitura limpa de mapas e a adição dinâmica de criaturas no combate.
 
 ## Requisitos de Implementação
 
-### 1. Gerenciador de Abas (Front-end / React Context)
-* **Objetivo:** Substituir a navegação de estado simples por um gerenciador de abas abertas.
-* **Ação:**
-  - Criar um `TabsContext` (ou Zustand/Redux) para gerenciar um array de objetos `Tab`: `{ id: string, title: string, type: 'sheet' | 'compendium' | 'map' | 'combat', entityId?: string }`.
-  - Manter o estado da aba ativa (`activeTabId`).
-  - Qualquer clique em um item da Sidebar (Lista de NPCs, Mapas, etc.) não deve mais mudar a página inteira, mas sim *adicionar uma nova aba* (ou focar nela, se já estiver aberta).
+### Lote 1: Gestão Global de Imagens e Reenquadramento
+* **Objetivo:** Permitir a edição e o ajuste de imagens já carregadas sem necessidade de re-upload, aplicável a todo o sistema (Mapas, Fichas e Lore).
+* **Ações:**
+  - **Reenquadramento Dinâmico:** Adicionar um botão de "Editar Recorte" (ícone de crop) próximo aos avatares/imagens já existentes. Ao clicar, abrir o modal de `Cropper` original carregando a imagem base em Base64 salva no banco, permitindo salvar um novo enquadramento.
+  - **Gestão de Mapas:** No módulo de Mapas, permitir a edição do nome da imagem base do mapa diretamente na UI.
 
-### 2. Interface da Barra de Abas (UI)
-* **Objetivo:** Renderizar a navegação visual das abas no topo da tela.
-* **Ação:**
-  - Criar um componente `<TabBar />` fixo no topo da área principal (ao lado ou abaixo da barra de título do aplicativo).
-  - Renderizar os botões das abas com o título truncado, um ícone representando o tipo da entidade, e um botão "X" para fechar a aba.
-  - Implementar scroll horizontal caso existam muitas abas abertas.
+### Lote 2: Melhorias de UX nos Mapas Táticos
+* **Objetivo:** Melhorar a visualização e interação com o mapa e seus habitantes.
+* **Ações:**
+  - **Controle de Zoom:** Implementar botões (Zoom In `+`, Zoom Out `-` e Resetar) na tela de visualização do mapa, alterando a escala (scale) do container da imagem de forma suave (CSS transform).
+  - **Modo de Leitura de Pins:** O mapa deve carregar por padrão em um modo "Read-Only", onde os pins são apenas clicáveis para ver a lore/habitantes, sem a caixa de edição ou risco de arrastá-los sem querer. Adicionar um botão "Modo Edição" (toggle) no topo da tela para habilitar a criação e movimentação de novos pins.
 
-### 3. Janelas Destacáveis (Pop-out / Electron IPC)
-* **Objetivo:** Permitir que o Mestre abra entidades em janelas secundárias separadas.
-* **Ação:**
-  - **Front-end:** Adicionar suporte a clique com botão direito (Menu de Contexto) nas abas da `<TabBar />`, com a opção "Abrir em Nova Janela". Isso deve disparar um evento IPC via `window.codexAPI` enviando os dados da aba (tipo e ID).
-  - **Back-end (`main.ts`):** Criar um listener `ipcMain.on('window:open-popout', ...)` que instancia um novo `BrowserWindow`. 
-  - A nova janela deve carregar a rota específica do Front-end (ex: via HashRouter do React) para renderizar *apenas* o componente desejado, ocultando a Sidebar principal nessa janela secundária.
-
-## Critérios de Aceite
-- O estado de edição das fichas não pode ser perdido ao alternar entre abas (o formulário deve ser preservado).
-- Fechar todas as abas deve renderizar uma tela vazia amigável (Placeholder).
-- Múltiplas instâncias do aplicativo (janelas destacadas) devem sincronizar os dados lendo do mesmo `db.json` de forma segura.
+### Lote 3: Adição Rápida no Tracker de Combate
+* **Objetivo:** Permitir a inserção de combatentes "on-the-fly" sem poluir o banco de dados principal.
+* **Ações:**
+  - **Fichas Temporárias:** No `CombatView`, adicionar um botão "+ Adicionar Temporário".
+  - Ele deve abrir um modal muito simples pedindo apenas: Nome, Iniciativa, PV Máximo e CA.
+  - Esses combatentes devem existir apenas no estado local do Tracker de Combate daquela sessão, sumindo ao encerrar o combate, sem serem salvos na coleção principal de `CharacterSheets`.
