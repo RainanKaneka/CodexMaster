@@ -51,6 +51,7 @@ function MapPinMarker({ pin, isSelected, showLabels, onClick }: MapPinMarkerProp
     <button
       id={`map-pin-${pin.id}`}
       onClick={(e) => { e.stopPropagation(); onClick(); }}
+      onMouseDown={(e) => e.stopPropagation()} // impede que o mousedown inicie panning
       title={pin.title || 'Pin sem título'}
       aria-label={`Pin: ${pin.title || 'Sem título'}`}
       style={{
@@ -62,7 +63,7 @@ function MapPinMarker({ pin, isSelected, showLabels, onClick }: MapPinMarkerProp
       className="
         absolute z-10
         flex flex-col items-center
-        group
+        group cursor-pointer
         transition-all duration-150
         hover:z-20
       "
@@ -107,11 +108,9 @@ function MapPinMarker({ pin, isSelected, showLabels, onClick }: MapPinMarkerProp
   );
 }
 
-// ---- Sub-componente: Painel Lateral de Edição do Pin ----
+// ---- Sub-componente: Painel Lateral de Leitura/Edição do Pin ----
 //
-// É um painel fixo à direita que substitui o antigo editor flutuante.
-// Salva automaticamente no DatabaseContext a cada keystroke (auto-save).
-// O pai gerencia o estado de "isSaving" via callback onSave.
+// Abre em modo Leitura por padrão. O botão [✏️ Editar Pin] habilita os campos.
 
 interface PinEditorPanelProps {
   pin: MapPin;
@@ -124,13 +123,15 @@ interface PinEditorPanelProps {
 }
 
 function PinEditorPanel({ pin, sheets, onFieldChange, onDelete, onClose, isSaving }: PinEditorPanelProps) {
-  // Estado local espelha o pin selecionado; sincroniza quando o pin muda.
   const [localPin, setLocalPin] = useState<MapPin>(pin);
   const [selectedAvatarId, setSelectedAvatarId] = useState<string | null>(null);
+  // Modo leitura por padrão — o botão Editar habilita os inputs
+  const [isEditing, setIsEditing] = useState(false);
 
-  // Re-sincroniza quando o pin selecionado muda (ex: clique em outro pin).
+  // Sincroniza quando o pin selecionado muda e reseta para leitura
   useEffect(() => {
     setLocalPin(pin);
+    setIsEditing(false);
   }, [pin.id]);
 
   const handleChange = <K extends keyof MapPin>(key: K, value: MapPin[K]) => {
@@ -154,19 +155,18 @@ function PinEditorPanel({ pin, sheets, onFieldChange, onDelete, onClose, isSavin
       <div className="flex items-center justify-between px-4 py-3 border-b border-codex-border shrink-0">
         <div className="flex items-center gap-2">
           <span className="text-gold-primary text-sm">📍</span>
-          <h3 className="font-heading text-gold-primary text-sm">Editar Pin</h3>
+          <h3 className="font-heading text-gold-primary text-sm">
+            {localPin.title || 'Pin sem título'}
+          </h3>
         </div>
         <div className="flex items-center gap-2">
-          {/* Indicador de salvamento */}
           {isSaving && (
-            <span className="text-[10px] text-text-muted animate-pulse-gold">
-              Salvando…
-            </span>
+            <span className="text-[10px] text-text-muted animate-pulse-gold">Salvando…</span>
           )}
           <button
             id="pin-editor-close"
             onClick={onClose}
-            title="Fechar painel e expandir mapa"
+            title="Fechar painel"
             className="btn-icon w-7 h-7 p-0 flex items-center justify-center text-sm"
           >
             ✕
@@ -174,164 +174,194 @@ function PinEditorPanel({ pin, sheets, onFieldChange, onDelete, onClose, isSavin
         </div>
       </div>
 
-      {/* Campos de edição */}
+      {/* Conteúdo do painel */}
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
 
-        {/* Campo: Título */}
-        <div>
-          <label htmlFor="pin-title" className="text-xs text-text-muted block mb-1.5 uppercase tracking-wide">
-            Título do Local
-          </label>
-          <input
-            id="pin-title"
-            type="text"
-            value={localPin.title}
-            onChange={(e) => handleChange('title', e.target.value)}
-            placeholder="Ex: Taverna do Corvo"
-            className="input-medieval text-sm"
-            autoFocus
-          />
-        </div>
+        {isEditing ? (
+          /* ===== MODO EDICAO ===== */
+          <>
+            {/* Campo: Título */}
+            <div>
+              <label htmlFor="pin-title" className="text-xs text-text-muted block mb-1.5 uppercase tracking-wide">
+                Título do Local
+              </label>
+              <input
+                id="pin-title"
+                type="text"
+                value={localPin.title}
+                onChange={(e) => handleChange('title', e.target.value)}
+                placeholder="Ex: Taverna do Corvo"
+                className="input-medieval text-sm"
+                autoFocus
+              />
+            </div>
 
-        {/* Campo: Descrição */}
-        <div className="flex-1 flex flex-col">
-          <label htmlFor="pin-description" className="text-xs text-text-muted block mb-1.5 uppercase tracking-wide">
-            História / Descrição
-          </label>
-          <textarea
-            id="pin-description"
-            value={localPin.description}
-            onChange={(e) => handleChange('description', e.target.value)}
-            placeholder="Descreva este local, seus segredos, habitantes e mistérios…"
-            rows={10}
-            className="input-medieval text-sm resize-y selectable flex-1"
-          />
-        </div>
+            {/* Campo: Descrição */}
+            <div className="flex-1 flex flex-col">
+              <label htmlFor="pin-description" className="text-xs text-text-muted block mb-1.5 uppercase tracking-wide">
+                História / Descrição
+              </label>
+              <textarea
+                id="pin-description"
+                value={localPin.description}
+                onChange={(e) => handleChange('description', e.target.value)}
+                placeholder="Descreva este local, seus segredos, habitantes e mistérios…"
+                rows={8}
+                className="input-medieval text-sm resize-y selectable flex-1"
+              />
+            </div>
 
-        {/* Habitantes / Entidades Vinculadas */}
-        <div className="flex flex-col gap-3 p-3 rounded-md bg-codex-bg border border-codex-border">
-          <p className="text-[10px] text-text-muted uppercase tracking-wider">Habitantes</p>
-          
-          <div className="flex gap-2">
-            <select
-              className="input-medieval text-xs flex-1"
-              value=""
-              onChange={(e) => {
-                const id = e.target.value;
-                if (id && !localPin.linkedEntities?.includes(id)) {
-                  const newEntities = [...(localPin.linkedEntities || []), id];
-                  handleChange('linkedEntities', newEntities);
-                }
-              }}
-            >
-              <option value="" disabled>Vincular Ficha...</option>
-              {sheets
-                .filter(s => !localPin.linkedEntities?.includes(s.id))
-                .map(s => <option key={s.id} value={s.id}>{s.name}</option>)
-              }
-            </select>
-          </div>
+            {/* Habitantes */}
+            <div className="flex flex-col gap-3 p-3 rounded-md bg-codex-bg border border-codex-border">
+              <p className="text-[10px] text-text-muted uppercase tracking-wider">Habitantes</p>
+              <div className="flex gap-2">
+                <select
+                  className="input-medieval text-xs flex-1"
+                  value=""
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    if (id && !localPin.linkedEntities?.includes(id)) {
+                      handleChange('linkedEntities', [...(localPin.linkedEntities || []), id]);
+                    }
+                  }}
+                >
+                  <option value="" disabled>Vincular Ficha...</option>
+                  {sheets
+                    .filter(s => !localPin.linkedEntities?.includes(s.id))
+                    .map(s => <option key={s.id} value={s.id}>{s.name}</option>)
+                  }
+                </select>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {(localPin.linkedEntities || []).map(id => {
+                  const char = sheets.find(s => s.id === id);
+                  if (!char) return null;
+                  return (
+                    <div key={id} className="relative group/avatar">
+                      <CharacterAvatar name={char.name} avatarUrl={char.avatar} size="md" onClick={() => setSelectedAvatarId(id)} />
+                      <button
+                        onClick={() => handleChange('linkedEntities', (localPin.linkedEntities || []).filter(i => i !== id))}
+                        className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-crimson-primary text-white text-[9px] flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity"
+                        title="Desvincular"
+                      >✕</button>
+                    </div>
+                  );
+                })}
+                {(!localPin.linkedEntities || localPin.linkedEntities.length === 0) && (
+                  <span className="text-xs text-text-muted italic">Nenhuma ficha vinculada.</span>
+                )}
+              </div>
+            </div>
 
-          <div className="flex flex-wrap gap-2 mt-1">
-            {(localPin.linkedEntities || []).map(id => {
-              const char = sheets.find(s => s.id === id);
-              if (!char) return null;
-              return (
-                <CharacterAvatar 
-                  key={id} 
-                  name={char.name} 
-                  avatarUrl={char.avatar}
-                  size="md" 
-                  onClick={() => setSelectedAvatarId(id)} 
-                />
-              );
-            })}
-            {(!localPin.linkedEntities || localPin.linkedEntities.length === 0) && (
-              <span className="text-xs text-text-muted italic">Nenhuma ficha vinculada.</span>
+            {/* Aparência */}
+            <div className="flex flex-col gap-3 p-3 rounded-md bg-codex-bg border border-codex-border">
+              <p className="text-[10px] text-text-muted uppercase tracking-wider">Aparência do Marcador</p>
+              <div className="flex items-center justify-between">
+                <label htmlFor="pin-color" className="text-xs text-text-secondary">Cor</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="pin-color"
+                    type="color"
+                    value={localPin.color || '#e53e3e'}
+                    onChange={(e) => handleChange('color', e.target.value)}
+                    className="w-6 h-6 rounded cursor-pointer border-0 bg-transparent p-0"
+                  />
+                  <button type="button" onClick={() => handleChange('color', undefined as any)} className="text-[10px] text-text-muted hover:text-gold-primary transition-colors">Reset</button>
+                </div>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center justify-between">
+                  <label htmlFor="pin-scale" className="text-xs text-text-secondary">Tamanho</label>
+                  <span className="text-[10px] text-text-muted font-mono">{localPin.scale?.toFixed(1) || '1.0'}x</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-text-muted">P</span>
+                  <input
+                    id="pin-scale" type="range" min="0.5" max="3.0" step="0.1"
+                    value={localPin.scale || 1.0}
+                    onChange={(e) => handleChange('scale', parseFloat(e.target.value))}
+                    className="flex-1 accent-gold-primary cursor-pointer"
+                  />
+                  <span className="text-[10px] text-text-muted">G</span>
+                </div>
+              </div>
+            </div>
+          </>
+        ) : (
+          /* ===== MODO LEITURA ===== */
+          <>
+            {/* Título leitura */}
+            <div>
+              <p className="text-[10px] text-text-muted uppercase tracking-wide mb-1">Título do Local</p>
+              <p className="text-sm text-text-primary font-medium">{localPin.title || <span className="italic text-text-muted">Sem título</span>}</p>
+            </div>
+
+            {/* Descrição leitura */}
+            <div className="flex-1">
+              <p className="text-[10px] text-text-muted uppercase tracking-wide mb-1">História / Descrição</p>
+              {localPin.description ? (
+                <p className="text-sm text-text-secondary leading-relaxed whitespace-pre-wrap selectable">{localPin.description}</p>
+              ) : (
+                <p className="text-xs text-text-muted italic">Sem descrição.</p>
+              )}
+            </div>
+
+            {/* Habitantes leitura */}
+            {(localPin.linkedEntities?.length ?? 0) > 0 && (
+              <div className="flex flex-col gap-2 p-3 rounded-md bg-codex-bg border border-codex-border">
+                <p className="text-[10px] text-text-muted uppercase tracking-wider">Habitantes</p>
+                <div className="flex flex-wrap gap-2">
+                  {(localPin.linkedEntities || []).map(id => {
+                    const char = sheets.find(s => s.id === id);
+                    if (!char) return null;
+                    return <CharacterAvatar key={id} name={char.name} avatarUrl={char.avatar} size="md" onClick={() => setSelectedAvatarId(id)} />;
+                  })}
+                </div>
+              </div>
             )}
-          </div>
-        </div>
 
-        {/* Campo: Aparência Visual */}
-        <div className="flex flex-col gap-3 p-3 rounded-md bg-codex-bg border border-codex-border">
-          <p className="text-[10px] text-text-muted uppercase tracking-wider">Aparência do Marcador</p>
-          
-          {/* Cor */}
-          <div className="flex items-center justify-between">
-            <label htmlFor="pin-color" className="text-xs text-text-secondary">Cor Customizada</label>
-            <div className="flex items-center gap-2">
-              <input
-                id="pin-color"
-                type="color"
-                value={localPin.color || '#e53e3e'}
-                onChange={(e) => handleChange('color', e.target.value)}
-                className="w-6 h-6 rounded cursor-pointer border-0 bg-transparent p-0"
-                title="Escolher cor do pin"
-              />
-              <button 
-                type="button" 
-                onClick={() => handleChange('color', undefined as any)}
-                className="text-[10px] text-text-muted hover:text-gold-primary transition-colors"
-              >
-                Reset
-              </button>
+            {/* Posição */}
+            <div className="p-3 rounded-md bg-codex-bg border border-codex-border space-y-1">
+              <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">Posição no Mapa</p>
+              <div className="flex gap-3">
+                <span className="text-xs text-text-secondary font-mono">X: <span className="text-text-primary">{localPin.coordinateX.toFixed(1)}%</span></span>
+                <span className="text-xs text-text-secondary font-mono">Y: <span className="text-text-primary">{localPin.coordinateY.toFixed(1)}%</span></span>
+              </div>
             </div>
-          </div>
-
-          {/* Tamanho (Scale) */}
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-center justify-between">
-              <label htmlFor="pin-scale" className="text-xs text-text-secondary">Tamanho</label>
-              <span className="text-[10px] text-text-muted font-mono">{localPin.scale?.toFixed(1) || '1.0'}x</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] text-text-muted">P</span>
-              <input
-                id="pin-scale"
-                type="range"
-                min="0.5"
-                max="3.0"
-                step="0.1"
-                value={localPin.scale || 1.0}
-                onChange={(e) => handleChange('scale', parseFloat(e.target.value))}
-                className="flex-1 accent-gold-primary cursor-pointer"
-              />
-              <span className="text-[10px] text-text-muted">G</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Metadados do pin (somente leitura) */}
-        <div className="p-3 rounded-md bg-codex-bg border border-codex-border space-y-1">
-          <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">Posição no Mapa</p>
-          <div className="flex gap-3">
-            <span className="text-xs text-text-secondary font-mono">
-              X: <span className="text-text-primary">{localPin.coordinateX.toFixed(1)}%</span>
-            </span>
-            <span className="text-xs text-text-secondary font-mono">
-              Y: <span className="text-text-primary">{localPin.coordinateY.toFixed(1)}%</span>
-            </span>
-          </div>
-        </div>
+          </>
+        )}
       </div>
 
       {/* Rodapé: Ações */}
       <div className="px-4 py-3 border-t border-codex-border shrink-0 flex gap-2">
-        <button
-          id="pin-editor-delete"
-          onClick={onDelete}
-          className="btn-danger text-xs py-1.5 px-3 flex items-center gap-1.5"
-          title="Excluir este pin permanentemente"
-        >
-          🗑 Excluir Pin
-        </button>
+        {isEditing ? (
+          <button
+            id="pin-editor-delete"
+            onClick={onDelete}
+            className="btn-danger text-xs py-1.5 px-3 flex items-center gap-1.5"
+            title="Excluir este pin permanentemente"
+          >
+            🗑 Excluir Pin
+          </button>
+        ) : (
+          <div /> // placeholder para manter o layout
+        )}
         <div className="flex-1" />
+        {!isEditing && (
+          <button
+            id="pin-editor-edit"
+            onClick={() => setIsEditing(true)}
+            className="btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5"
+          >
+            ✏️ Editar Pin
+          </button>
+        )}
         <button
           id="pin-editor-close-bottom"
-          onClick={onClose}
+          onClick={isEditing ? () => setIsEditing(false) : onClose}
           className="btn-secondary text-xs py-1.5 px-3"
         >
-          Fechar
+          {isEditing ? 'Concluir' : 'Fechar'}
         </button>
       </div>
 
@@ -341,11 +371,11 @@ function PinEditorPanel({ pin, sheets, onFieldChange, onDelete, onClose, isSavin
         if (!char) return null;
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div 
+            <div
               className="bg-codex-surface border border-codex-border rounded-lg shadow-2xl p-5 max-w-sm w-full relative animate-fade-in"
               onClick={e => e.stopPropagation()}
             >
-              <button 
+              <button
                 onClick={(e) => { e.stopPropagation(); setSelectedAvatarId(null); }}
                 className="absolute top-3 right-3 w-6 h-6 flex items-center justify-center text-text-muted hover:text-white rounded hover:bg-codex-surface2"
               >
@@ -372,7 +402,7 @@ function PinEditorPanel({ pin, sheets, onFieldChange, onDelete, onClose, isSavin
                   <p className="font-bold text-white">{char.levelOrCR}</p>
                 </div>
               </div>
-              <button 
+              <button
                 className="btn-primary w-full text-sm py-2"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -403,6 +433,53 @@ export default function MapsView() {
   const [cropImageUrl, setCropImageUrl] = useState<string | null>(null);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editName, setEditName] = useState('');
+
+  // Zoom Unificado (Lote 2)
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const MIN_ZOOM = 0.2;
+  const MAX_ZOOM = 4.0;
+  const ZOOM_STEP = 0.25;
+  const adjustZoom = (delta: number) => setZoomLevel(z => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, parseFloat((z + delta).toFixed(2)))));
+
+  // Panning (Lote 2)
+  const [panX, setPanX] = useState(0);
+  const [panY, setPanY] = useState(0);
+  const isPanningRef = useRef(false)       // se o mouse está pressionado no fundo
+  const panStartRef = useRef({ x: 0, y: 0 });
+  const hasPannedRef = useRef(false);       // distingue clique rápido de arrasto real
+  const zoomLevelRef = useRef(zoomLevel);   // ref para acessar o valor atual dentro de callbacks
+  useEffect(() => { zoomLevelRef.current = zoomLevel; }, [zoomLevel]);
+
+  // Ref para o container visível do mapa (usado para calcular o centro no zoom por botão)
+  const mapViewportRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * Função de Zoom Unificada com Matemática do Mundo (Offset Virtual)
+   */
+  const applyZoom = useCallback((newZoomRaw: number, mouseClientX: number, mouseClientY: number) => {
+    const vp = mapViewportRef.current;
+    if (!vp) return;
+
+    const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, parseFloat(newZoomRaw.toFixed(2))));
+    if (newZoom === zoomLevel) return;
+
+    // 1. Posição do mouse na tela (relativa à Câmera estática)
+    const rect = vp.getBoundingClientRect();
+    const mouseX = mouseClientX - rect.left;
+    const mouseY = mouseClientY - rect.top;
+
+    // 2. Coordenadas do MUNDO virtual onde o mouse está agora
+    const worldX = (mouseX - panX) / zoomLevel;
+    const worldY = (mouseY - panY) / zoomLevel;
+
+    // 3. Calcula o novo Pan para manter as coordenadas do mundo debaixo do mouse
+    const newPanX = mouseX - (worldX * newZoom);
+    const newPanY = mouseY - (worldY * newZoom);
+
+    setZoomLevel(newZoom);
+    setPanX(newPanX);
+    setPanY(newPanY);
+  }, [zoomLevel, panX, panY]);
   
   // Persiste a preferência de mostrar rótulos no localStorage
   const [showLabels, setShowLabels] = useState(() => {
@@ -462,7 +539,7 @@ export default function MapsView() {
     }
   };
 
-  // Adiciona um pin ao clicar com botão direito no mapa
+  // Adiciona um pin ao clicar com botão DIREITO no mapa
   const handleMapRightClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!selectedMap || !mapContainerRef.current) return;
     e.preventDefault();
@@ -551,6 +628,73 @@ export default function MapsView() {
     setIsSaving(false);
     setSelectedPinId(null);
   };
+
+  // Reseta zoom e pan quando o mapa selecionado muda
+  useEffect(() => {
+    setZoomLevel(1);
+    setPanX(0);
+    setPanY(0);
+  }, [selectedMapId]);
+
+  // =============================================================================
+  // Panning handlers — mouse down/move/up no container externo (não no mapContainerRef)
+  // =============================================================================
+  const handlePanMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    // Só activa panning no botão esquerdo (button 0) e apenas no fundo (não nos pins)
+    if (e.button !== 0) return;
+    isPanningRef.current = true;
+    hasPannedRef.current = false;
+    panStartRef.current = { x: e.clientX, y: e.clientY };
+    e.currentTarget.style.cursor = 'grabbing';
+  }, []);
+
+  const handlePanMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isPanningRef.current) return;
+    const dx = e.clientX - panStartRef.current.x;
+    const dy = e.clientY - panStartRef.current.y;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) hasPannedRef.current = true;
+    if (hasPannedRef.current) {
+      setPanX(px => px + dx);
+      setPanY(py => py + dy);
+      panStartRef.current = { x: e.clientX, y: e.clientY };
+    }
+  }, []);
+
+  const handlePanMouseUp = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isPanningRef.current) return;
+    isPanningRef.current = false;
+    e.currentTarget.style.cursor = '';
+    // Só fecha o painel se foi um clique rápido (sem arrasto real)
+    if (!hasPannedRef.current) handleClosePanel();
+    hasPannedRef.current = false;
+  }, [handleClosePanel]);
+
+  // Escape fecha o painel do pin
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') handleClosePanel(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [handleClosePanel]);
+
+  /**
+   * Panning também para quando o mouse sai do viewport —
+   * MAS só encerra o drag sem chamar handleClosePanel (bug "sticky state").
+   */
+  const handlePanMouseLeave = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isPanningRef.current) return;
+    isPanningRef.current = false;
+    hasPannedRef.current = false;
+    e.currentTarget.style.cursor = '';
+  }, []);
+
+  /**
+   * Wheel handler — zoom centrado na posição do cursor usando coordenadas do mundo virtual.
+   */
+  const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const delta = e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP;
+    applyZoom(zoomLevel + delta, e.clientX, e.clientY);
+  }, [applyZoom, zoomLevel]);
 
   const isPanelOpen = selectedPinId !== null && selectedPin !== null;
 
@@ -658,11 +802,11 @@ export default function MapsView() {
                   <span className="opacity-70">Botão direito no mapa para adicionar um pin</span>
                 </p>
               </div>
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 flex-wrap">
                 <button
                   onClick={() => setShowLabels(!showLabels)}
                   className={`btn-secondary flex items-center gap-1.5 text-xs py-1 px-2.5 transition-colors ${showLabels ? 'bg-codex-surface2 border-gold-dim text-gold-primary' : 'opacity-70 hover:opacity-100'}`}
-                  title={showLabels ? "Ocultar títulos dos locais no mapa" : "Mostrar todos os títulos dos locais no mapa"}
+                  title={showLabels ? 'Ocultar títulos dos locais no mapa' : 'Mostrar todos os títulos dos locais no mapa'}
                 >
                   <span className="text-sm">👁️</span>
                   {showLabels ? 'Ocultar Nomes' : 'Mostrar Nomes'}
@@ -686,36 +830,84 @@ export default function MapsView() {
             {/* Layout: Mapa + Painel de Edição lado a lado */}
             <div className="flex-1 overflow-hidden flex">
 
-              {/* Área do Mapa */}
+              {/* 1. CÂMERA (Estática) — Janela fixa que escuta o mouse */}
               <div
-                className="flex-1 overflow-auto p-4 flex items-start justify-center relative"
-                // Clique fora dos pins fecha o painel (mas não ao clicar no painel em si)
-                onClick={() => handleClosePanel()}
+                ref={mapViewportRef}
+                className="flex-1 w-full h-full relative overflow-hidden select-none"
+                onMouseDown={handlePanMouseDown}
+                onMouseMove={handlePanMouseMove}
+                onMouseUp={handlePanMouseUp}
+                onMouseLeave={handlePanMouseLeave}
+                onWheel={handleWheel}
+                style={{ cursor: isPanningRef.current ? 'grabbing' : 'grab' }}
               >
-                <div
-                  ref={mapContainerRef}
-                  onContextMenu={handleMapRightClick}
-                  onClick={(e) => e.stopPropagation()}
-                  className="relative inline-block select-none cursor-crosshair"
-                >
-                  {/* Imagem do Mapa */}
-                  <img
-                    src={selectedMap.imageBase64}
-                    alt={`Mapa: ${selectedMap.name}`}
-                    className="max-w-full max-h-[calc(100vh-160px)] rounded-lg border border-codex-border shadow-lg"
-                    draggable={false}
-                  />
 
-                  {/* Pins sobrepostos */}
-                  {selectedMap.pins.map((pin) => (
-                    <MapPinMarker
-                      key={pin.id}
-                      pin={pin}
-                      isSelected={selectedPinId === pin.id}
-                      showLabels={showLabels}
-                      onClick={() => setSelectedPinId(pin.id)}
+                {/* 2. LENTE (Dinâmica) — Move e escala o mundo todo (sem transition!) */}
+                <div
+                  className="absolute top-0 left-0"
+                  style={{ transform: `translate(${panX}px, ${panY}px) scale(${zoomLevel})`, transformOrigin: '0 0' }}
+                >
+                  {/* 3. BOARD (Mesa) — O tamanho DESTE container dita a posição dos pins! */}
+                  <div
+                    ref={mapContainerRef}
+                    onContextMenu={handleMapRightClick}
+                    className="relative inline-block cursor-crosshair"
+                  >
+                    {/* Imagem do Mapa */}
+                    <img
+                      src={selectedMap.imageBase64}
+                      alt={`Mapa: ${selectedMap.name}`}
+                      className="block select-none pointer-events-none rounded-lg border border-codex-border shadow-lg"
+                      draggable={false}
                     />
-                  ))}
+
+                    {/* Pins sobrepostos (relativos ao Board) */}
+                    {selectedMap.pins.map((pin) => (
+                      <MapPinMarker
+                        key={pin.id}
+                        pin={pin}
+                        isSelected={selectedPinId === pin.id}
+                        showLabels={showLabels}
+                        onClick={() => setSelectedPinId(pin.id)}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                <div className="absolute bottom-4 right-4 z-20 flex items-center gap-1 bg-codex-surface/90 border border-codex-border backdrop-blur-sm rounded-lg px-2 py-1.5 shadow-lg">
+                  <button
+                    onClick={(e) => { 
+                      e.stopPropagation(); 
+                      if (!mapViewportRef.current) return;
+                      const rect = mapViewportRef.current.getBoundingClientRect();
+                      applyZoom(zoomLevel - ZOOM_STEP, rect.left + rect.width / 2, rect.top + rect.height / 2);
+                    }}
+                    className="w-7 h-7 flex items-center justify-center text-sm font-bold text-text-secondary hover:text-gold-primary hover:bg-codex-surface2 rounded transition-colors"
+                    title="Reduzir zoom"
+                    disabled={zoomLevel <= MIN_ZOOM}
+                  >
+                    −
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setZoomLevel(1); setPanX(0); setPanY(0); }}
+                    className="text-[10px] font-mono text-text-muted hover:text-gold-primary px-1 transition-colors min-w-[3rem] text-center"
+                    title="Resetar zoom para 100% e centralizar"
+                  >
+                    {Math.round(zoomLevel * 100)}%
+                  </button>
+                  <button
+                    onClick={(e) => { 
+                      e.stopPropagation(); 
+                      if (!mapViewportRef.current) return;
+                      const rect = mapViewportRef.current.getBoundingClientRect();
+                      applyZoom(zoomLevel + ZOOM_STEP, rect.left + rect.width / 2, rect.top + rect.height / 2);
+                    }}
+                    className="w-7 h-7 flex items-center justify-center text-sm font-bold text-text-secondary hover:text-gold-primary hover:bg-codex-surface2 rounded transition-colors"
+                    title="Aumentar zoom"
+                    disabled={zoomLevel >= MAX_ZOOM}
+                  >
+                    +
+                  </button>
                 </div>
               </div>
 

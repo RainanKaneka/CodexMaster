@@ -1136,6 +1136,18 @@ export default function CombatTrackerView() {
   const [addInitInput, setAddInitInput] = useState('');
   const [addSearch, setAddSearch] = useState('');
 
+  // --- Estado do Modal de Combatente Temporário (Lote 3) ---
+  const [showTempModal, setShowTempModal] = useState(false);
+  const [tempName, setTempName]         = useState('');
+  const [tempInit, setTempInit]         = useState('');
+  const [tempHpMax, setTempHpMax]       = useState('');
+  const [tempCA, setTempCA]             = useState('');
+
+  const closeTempModal = () => {
+    setShowTempModal(false);
+    setTempName(''); setTempInit(''); setTempHpMax(''); setTempCA('');
+  };
+
   // --- Filtragem de Fichas no Painel de Seleção ---
   const filteredSheets = useMemo(() => {
     const q = stagingSearch.toLowerCase().trim();
@@ -1717,6 +1729,58 @@ export default function CombatTrackerView() {
     setAddSearch('');
   }, [encounter, persistEncounter]);
 
+  /**
+   * Lote 3: Insere um combatente TEMPORÁRIO criado no modal.
+   * NÃO grava nada no DB — o combatente existe apenas no estado local do encontro.
+   * O fallback visual (iniciais) já é tratado pelo CombatantRow (sheet === null).
+   */
+  const handleAddTemporaryCombatant = useCallback(async () => {
+    if (!encounter) return;
+
+    const name   = tempName.trim();
+    const init   = parseInt(tempInit, 10);
+    const hpMax  = parseInt(tempHpMax, 10);
+    const ca     = parseInt(tempCA, 10);
+
+    if (!name || isNaN(init) || isNaN(hpMax) || hpMax < 1 || isNaN(ca)) return;
+
+    const id = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `temp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+    // sheetId vazio sinaliza ao CombatantRow que não há ficha no DB
+    const newCombatant: Combatant = {
+      id,
+      sheetId: '',          // sem referência ao DB — temporário
+      name,
+      type: 'creature',     // tratado como criatura por padrão
+      initiative: init,
+      hpCurrent: hpMax,
+      hpMax,
+      armorClass: ca,
+      dexterityModifier: 0,
+      dexterityScore: 10,
+      isActiveTurn: false,
+    };
+
+    const { combatants, round } = encounter;
+    const activeId = combatants[encounter.turnIndex]?.id;
+
+    const sorted = sortByInitiative([...combatants, newCombatant]);
+    const newTurnIndex = activeId
+      ? Math.max(0, sorted.findIndex((c) => c.id === activeId))
+      : encounter.turnIndex;
+
+    const updated: ActiveEncounter = {
+      combatants: sorted.map((c, i) => ({ ...c, isActiveTurn: i === newTurnIndex })),
+      round,
+      turnIndex: newTurnIndex,
+    };
+
+    await persistEncounter(updated);
+    closeTempModal();
+  }, [encounter, persistEncounter, tempName, tempInit, tempHpMax, tempCA]);
+
   /** Auto-rola iniciativa (1d20 + mod Dex) para a ficha selecionada no painel */
   const handleAutoRollInit = useCallback(() => {
     if (!addSheetId) return;
@@ -1981,6 +2045,15 @@ export default function CombatTrackerView() {
             >
               ➕ Reforços
             </button>
+            {/* Lote 3: Botão de Combatente Temporário */}
+            <button
+              id="combat-add-temp-btn"
+              onClick={() => setShowTempModal(true)}
+              className="text-xs py-2 px-3 rounded-lg border border-amber-800/50 text-amber-400 hover:bg-amber-950/40 hover:border-amber-600/60 transition-all duration-150"
+              title="Adicionar criatura temporária sem salvar no banco"
+            >
+              ⚡ Temporário
+            </button>
             <div className="w-px h-8 bg-codex-border mx-1" />
             <button
               id="combat-end-btn"
@@ -2122,6 +2195,130 @@ export default function CombatTrackerView() {
                 </p>
               );
             })()}
+          </div>
+        </div>
+      )}
+
+      {/* ===== Modal: Combatente Temporário (Lote 3) ===== */}
+      {showTempModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) closeTempModal(); }}
+        >
+          <div
+            id="temp-combatant-modal"
+            className="bg-codex-surface border border-amber-800/50 rounded-xl shadow-2xl w-full max-w-sm animate-fade-in"
+          >
+            {/* Cabeçalho */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-codex-border">
+              <div>
+                <h2 className="font-heading text-base text-amber-300">⚡ Combatente Temporário</h2>
+                <p className="text-[10px] text-text-muted mt-0.5">Inserido apenas nesta sessão — não salvo no banco de dados.</p>
+              </div>
+              <button
+                onClick={closeTempModal}
+                className="w-7 h-7 flex items-center justify-center rounded-lg text-text-muted hover:text-white hover:bg-codex-surface2 transition-colors text-sm"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Formulário */}
+            <div className="px-5 py-4 flex flex-col gap-3">
+
+              {/* Nome */}
+              <div>
+                <label htmlFor="temp-name" className="text-[10px] text-text-muted uppercase tracking-wider block mb-1">
+                  Nome
+                </label>
+                <input
+                  id="temp-name"
+                  type="text"
+                  value={tempName}
+                  onChange={(e) => setTempName(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleAddTemporaryCombatant()}
+                  placeholder="Ex: Goblin Blá"
+                  className="input-medieval text-sm w-full"
+                  autoFocus
+                />
+              </div>
+
+              {/* Linha: Iniciativa + PV Máximo + CA */}
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label htmlFor="temp-init" className="text-[10px] text-text-muted uppercase tracking-wider block mb-1">
+                    Iniciativa
+                  </label>
+                  <input
+                    id="temp-init"
+                    type="number"
+                    value={tempInit}
+                    onChange={(e) => setTempInit(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddTemporaryCombatant()}
+                    placeholder="15"
+                    className="input-medieval text-sm w-full text-center"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="temp-hp" className="text-[10px] text-text-muted uppercase tracking-wider block mb-1">
+                    PV Máx.
+                  </label>
+                  <input
+                    id="temp-hp"
+                    type="number"
+                    min={1}
+                    value={tempHpMax}
+                    onChange={(e) => setTempHpMax(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddTemporaryCombatant()}
+                    placeholder="20"
+                    className="input-medieval text-sm w-full text-center"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="temp-ca" className="text-[10px] text-text-muted uppercase tracking-wider block mb-1">
+                    CA
+                  </label>
+                  <input
+                    id="temp-ca"
+                    type="number"
+                    min={0}
+                    value={tempCA}
+                    onChange={(e) => setTempCA(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddTemporaryCombatant()}
+                    placeholder="13"
+                    className="input-medieval text-sm w-full text-center"
+                  />
+                </div>
+              </div>
+
+              {/* Feedback de validação em linha */}
+              {tempName.trim() === '' && (
+                <p className="text-[10px] text-amber-500/70">⚠ Informe um nome para o combatente.</p>
+              )}
+            </div>
+
+            {/* Rodapé */}
+            <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-codex-border">
+              <button
+                onClick={closeTempModal}
+                className="btn-secondary text-xs py-1.5 px-3"
+              >
+                Cancelar
+              </button>
+              <button
+                id="temp-combatant-confirm"
+                onClick={handleAddTemporaryCombatant}
+                disabled={
+                  !tempName.trim() ||
+                  isNaN(parseInt(tempInit, 10)) ||
+                  isNaN(parseInt(tempHpMax, 10)) || parseInt(tempHpMax, 10) < 1 ||
+                  isNaN(parseInt(tempCA, 10))
+                }
+                className="btn-primary text-xs py-1.5 px-4 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                ⚡ Adicionar ao Combate
+              </button>
+            </div>
           </div>
         </div>
       )}
