@@ -1,25 +1,27 @@
-# Issue: Melhorias no Módulo de Mapas, Combate e Gestão Global de Imagens (v1.5.0)
+# Issue: Ferramentas Auxiliares do Mestre e Implementação de TDD (v1.6.0)
 
 ## Contexto
-A versão 1.5.0 foca em qualidade de vida (QoL) para o Mestre durante a sessão. O objetivo é otimizar a gestão de recursos visuais (imagens, zoom e reenquadramento) e acelerar o fluxo de jogo com a leitura limpa de mapas e a adição dinâmica de criaturas no combate.
+A versão 1.6.0 tem como foco expandir o arsenal do Mestre com ferramentas matemáticas e procedimentais mais robustas. Além das melhorias de interface e lógica, esta versão inaugura a padronização de Testes Automatizados (Unitários e de Componente) no projeto. **Nenhuma funcionalidade a partir desta versão deve ser entregue sem sua respectiva cobertura de testes.**
 
-## Requisitos de Implementação
+## Requisitos de Implementação e Lotes
 
-### Lote 1: Gestão Global de Imagens e Reenquadramento
-* **Objetivo:** Permitir a edição e o ajuste de imagens já carregadas sem necessidade de re-upload, aplicável a todo o sistema (Mapas, Fichas e Lore).
+### Lote 1: Setup de Testes e Geradores de Tabela (Ranges precisos)
+* **Objetivo:** Configurar a infraestrutura de testes e refatorar a lógica das Tabelas de Rolagem.
 * **Ações:**
-  - **Reenquadramento Dinâmico:** Adicionar um botão de "Editar Recorte" (ícone de crop) próximo aos avatares/imagens já existentes. Ao clicar, abrir o modal de `Cropper` original carregando a imagem base em Base64 salva no banco, permitindo salvar um novo enquadramento.
-  - **Gestão de Mapas:** No módulo de Mapas, permitir a edição do nome da imagem base do mapa diretamente na UI.
+  - **Setup TDD:** Instalar e configurar `vitest` e `@testing-library/react`.
+  - **Refatoração das Tabelas:** Modificar a estrutura de dados (e a UI) das Tabelas de Rolagem. Em vez de depender apenas de um min/max global, cada linha da tabela deve permitir a definição de um *range* de valores exatos (ex: Linha 1 responde aos valores `1-5`, Linha 2 responde aos valores `6-10`).
+  - **Testes Exigidos:** Escrever testes unitários garantindo que o algoritmo de seleção de itens da tabela respeite perfeitamente os ranges customizados.
 
-### Lote 2: Melhorias de UX nos Mapas Táticos
-* **Objetivo:** Melhorar a visualização e interação com o mapa e seus habitantes.
+### Lote 2: Integração AnyDice (Gráficos de Probabilidade)
+* **Objetivo:** Trazer a visualização estatística para a mesa, permitindo que o Mestre veja as chances de um rolamento.
 * **Ações:**
-  - **Controle de Zoom:** Implementar botões (Zoom In `+`, Zoom Out `-` e Resetar) na tela de visualização do mapa, alterando a escala (scale) do container da imagem de forma suave (CSS transform).
-  - **Modo de Leitura de Pins:** O mapa deve carregar por padrão em um modo "Read-Only", onde os pins são apenas clicáveis para ver a lore/habitantes, sem a caixa de edição ou risco de arrastá-los sem querer. Adicionar um botão "Modo Edição" (toggle) no topo da tela para habilitar a criação e movimentação de novos pins.
+  - **Motor Matemático:** Implementar uma função que calcule a distribuição de probabilidade de fórmulas de dados no formato de RPG (ex: `2d6 + 4`, `1d20 com vantagem`).
+  - **UI de Gráficos:** Renderizar um gráfico de barras simples e visualmente integrado na seção de "Rolagem de Dados" mostrando a curva de probabilidade. (Recomenda-se o uso de bibliotecas leves como `recharts` ou `chart.js`, ou HTML/CSS puro se a complexidade permitir).
+  - **Testes Exigidos:** Testes unitários validando as saídas do motor matemático de probabilidade contra resultados estatísticos conhecidos.
 
-### Lote 3: Adição Rápida no Tracker de Combate
-* **Objetivo:** Permitir a inserção de combatentes "on-the-fly" sem poluir o banco de dados principal.
+### Lote 3: Geradores Rápidos (Procedural Generation)
+* **Objetivo:** Melhorar a intuição e a variedade dos geradores procedimentais (Nomes, Tavernas, Tesouros).
 * **Ações:**
-  - **Fichas Temporárias:** No `CombatView`, adicionar um botão "+ Adicionar Temporário".
-  - Ele deve abrir um modal muito simples pedindo apenas: Nome, Iniciativa, PV Máximo e CA.
-  - Esses combatentes devem existir apenas no estado local do Tracker de Combate daquela sessão, sumindo ao encerrar o combate, sem serem salvos na coleção principal de `CharacterSheets`.
+  - **Aprimoramento Lógico:** Refatorar as listas de arrays e a lógica de concatenação para gerar resultados mais coesos e menos repetitivos.
+  - **UI Intuitiva:** Redesenhar a interface dos geradores rápidos para que a seleção de categorias e a geração de múltiplos resultados simultâneos seja feita com menos cliques.
+  - **Testes Exigidos:** Testes de componente garantindo que a renderização dos resultados ocorre corretamente após o clique no botão de gerar.

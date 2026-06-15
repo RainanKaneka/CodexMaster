@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { RollTable, RollTableResult } from '../../main/types';
 import { useDatabase } from '../context/DatabaseContext';
+import { validateTableRanges } from '../utils/TableValidator';
 
 // =============================================================================
 // GeneratorsView — Tabelas de Rolagem e Geradores Rápidos (Fase 6)
@@ -178,32 +179,52 @@ function TableEditor({ table, onSave, onCancel }: TableEditorProps) {
   const [title, setTitle] = useState(table.title);
   const [diceString, setDiceString] = useState(table.diceString);
   const [results, setResults] = useState<RollTableResult[]>([...table.results]);
-  const [newMin, setNewMin] = useState('');
-  const [newMax, setNewMax] = useState('');
-  const [newText, setNewText] = useState('');
 
   const handleAddRow = () => {
-    const min = parseInt(newMin, 10);
-    const max = parseInt(newMax, 10);
-    if (isNaN(min) || isNaN(max) || !newText.trim() || min > max) return;
+    let nextVal = 1;
+    if (results.length > 0) {
+      // Pega o maior rangeMax existente para continuar de onde parou
+      const maxes = results.map(r => r.rangeMax).filter(n => !isNaN(n));
+      const highest = maxes.length > 0 ? Math.max(...maxes) : 0;
+      nextVal = highest + 1;
+    }
+
     const row: RollTableResult = {
       id: genId(),
-      rangeMin: min,
-      rangeMax: max,
-      resultText: newText.trim(),
+      rangeMin: nextVal,
+      rangeMax: nextVal,
+      resultText: '',
     };
-    setResults((prev) => [...prev, row].sort((a, b) => a.rangeMin - b.rangeMin));
-    setNewMin(''); setNewMax(''); setNewText('');
+    
+    setResults((prev) => [...prev, row]);
+  };
+
+  const handleRowChange = (id: string, field: keyof Omit<RollTableResult, 'id'>, value: string) => {
+    setResults((prev) => prev.map((r) => {
+      if (r.id !== id) return r;
+      if (field === 'resultText') return { ...r, resultText: value };
+      return { ...r, [field]: parseInt(value, 10) };
+    }));
   };
 
   const handleDeleteRow = (id: string) => {
     setResults((prev) => prev.filter((r) => r.id !== id));
   };
 
+  const isValid = useMemo(() => {
+    if (!title.trim() || !diceString.trim()) return false;
+    for (const r of results) {
+      if (!r.resultText.trim()) return false;
+    }
+    return validateTableRanges(results);
+  }, [title, diceString, results]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !diceString.trim()) return;
-    onSave({ ...table, title: title.trim(), diceString: diceString.trim(), results });
+    if (!isValid) return;
+    // Ordena as linhas antes de salvar
+    const sorted = [...results].sort((a, b) => a.rangeMin - b.rangeMin);
+    onSave({ ...table, title: title.trim(), diceString: diceString.trim(), results: sorted });
   };
 
   return (
@@ -228,44 +249,8 @@ function TableEditor({ table, onSave, onCancel }: TableEditorProps) {
         />
       </div>
 
-      {/* Linha de adição de resultado */}
-      <div className="flex gap-2 items-center shrink-0">
-        <input
-          type="number"
-          value={newMin}
-          onChange={(e) => setNewMin(e.target.value)}
-          placeholder="Mín"
-          className="input-medieval w-16 text-xs text-center font-mono"
-          min={1}
-        />
-        <span className="text-text-muted text-xs">–</span>
-        <input
-          type="number"
-          value={newMax}
-          onChange={(e) => setNewMax(e.target.value)}
-          placeholder="Máx"
-          className="input-medieval w-16 text-xs text-center font-mono"
-          min={1}
-        />
-        <input
-          type="text"
-          value={newText}
-          onChange={(e) => setNewText(e.target.value)}
-          placeholder="Texto do resultado..."
-          className="input-medieval flex-1 text-xs"
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddRow(); } }}
-        />
-        <button
-          type="button"
-          onClick={handleAddRow}
-          className="btn-secondary text-xs py-1.5 px-3 shrink-0"
-        >
-          + Linha
-        </button>
-      </div>
-
       {/* Lista de resultados */}
-      <div className="flex-1 overflow-y-auto rounded border border-codex-border bg-codex-bg">
+      <div className="flex-1 overflow-y-auto rounded border border-codex-border bg-codex-bg flex flex-col">
         {results.length === 0 ? (
           <div className="flex items-center justify-center h-full text-xs text-text-muted">
             Adicione linhas de resultado acima.
@@ -281,30 +266,70 @@ function TableEditor({ table, onSave, onCancel }: TableEditorProps) {
               </tr>
             </thead>
             <tbody>
-              {results.map((row) => (
-                <tr key={row.id} className="border-b border-codex-border/50 hover:bg-codex-surface/50">
-                  <td className="px-3 py-1.5 font-mono text-gold-primary">{row.rangeMin}</td>
-                  <td className="px-3 py-1.5 font-mono text-gold-primary">{row.rangeMax}</td>
-                  <td className="px-3 py-1.5 text-text-secondary">{row.resultText}</td>
-                  <td className="px-3 py-1.5">
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteRow(row.id)}
-                      className="text-text-muted hover:text-crimson-bright"
-                      title="Remover linha"
-                    >✕</button>
-                  </td>
-                </tr>
-              ))}
+              {results.map((row) => {
+                const isError = isNaN(row.rangeMin) || isNaN(row.rangeMax) || row.rangeMin > row.rangeMax || !row.resultText.trim();
+                return (
+                  <tr key={row.id} className="border-b border-codex-border/50 hover:bg-codex-surface/50">
+                    <td className="px-3 py-1.5">
+                      <input
+                        type="number"
+                        value={isNaN(row.rangeMin) ? '' : row.rangeMin}
+                        onChange={(e) => handleRowChange(row.id, 'rangeMin', e.target.value)}
+                        className={`input-medieval w-16 text-xs text-center font-mono ${isError ? 'border-crimson-bright focus:border-crimson-bright' : ''}`}
+                      />
+                    </td>
+                    <td className="px-3 py-1.5">
+                      <input
+                        type="number"
+                        value={isNaN(row.rangeMax) ? '' : row.rangeMax}
+                        onChange={(e) => handleRowChange(row.id, 'rangeMax', e.target.value)}
+                        className={`input-medieval w-16 text-xs text-center font-mono ${isError ? 'border-crimson-bright focus:border-crimson-bright' : ''}`}
+                      />
+                    </td>
+                    <td className="px-3 py-1.5">
+                      <input
+                        type="text"
+                        value={row.resultText}
+                        onChange={(e) => handleRowChange(row.id, 'resultText', e.target.value)}
+                        className={`input-medieval w-full text-xs ${isError ? 'border-crimson-bright focus:border-crimson-bright' : ''}`}
+                      />
+                    </td>
+                    <td className="px-3 py-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteRow(row.id)}
+                        className="text-text-muted hover:text-crimson-bright"
+                        title="Remover linha"
+                      >✕</button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
+        
+        {/* Botão de Adição no final da lista */}
+        <div className="p-2 border-t border-codex-border bg-codex-surface shrink-0">
+          <button
+            type="button"
+            onClick={handleAddRow}
+            className="w-full btn-secondary text-xs py-2 border-dashed border-codex-border/60 hover:border-gold-dim hover:text-gold-primary transition-colors"
+          >
+            + Adicionar Linha
+          </button>
+        </div>
       </div>
 
       {/* Ações */}
-      <div className="flex gap-2 justify-end shrink-0">
-        <button type="button" onClick={onCancel} className="btn-secondary text-xs py-1.5 px-4">Cancelar</button>
-        <button type="submit" className="btn-primary text-xs py-1.5 px-5">💾 Salvar Tabela</button>
+      <div className="flex gap-2 justify-between items-center shrink-0">
+        <div className="text-xs text-crimson-bright font-medium px-1">
+          {(!validateTableRanges(results) && results.length > 0) && '⚠ Os intervalos não podem se sobrepor ou estar vazios.'}
+        </div>
+        <div className="flex gap-2">
+          <button type="button" onClick={onCancel} className="btn-secondary text-xs py-1.5 px-4">Cancelar</button>
+          <button type="submit" disabled={!isValid} className="btn-primary text-xs py-1.5 px-5 disabled:opacity-50 disabled:cursor-not-allowed">💾 Salvar Tabela</button>
+        </div>
       </div>
     </form>
   );
