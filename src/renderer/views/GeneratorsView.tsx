@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo } from 'react';
 import { RollTable, RollTableResult } from '../../main/types';
 import { useDatabase } from '../context/DatabaseContext';
 import { validateTableRanges } from '../utils/TableValidator';
+import { generateFromTemplate } from '../utils/ProceduralEngine';
 
 // =============================================================================
 // GeneratorsView — Tabelas de Rolagem e Geradores Rápidos (Fase 6)
@@ -412,86 +413,162 @@ function TableCard({ table, onEdit, onDelete }: TableCardProps) {
 }
 
 // =============================================================================
-// Componente: Painel de Geradores Estáticos
+// Configuração dos Cards Procedurais
+// Cada entrada mapeia para uma categoria do generatorsData.json
 // =============================================================================
 
-function StaticGeneratorsPanel() {
-  const [activeGen, setActiveGen] = useState<GeneratorKey>('npcNames');
-  const [results, setResults] = useState<string[]>([]);
+const PROCEDURAL_CATEGORIES = [
+  { key: 'tavern',          icon: '🍺', label: 'Nome de Taverna',    description: 'Nomes procedurais compostos por template' },
+  { key: 'npc',             icon: '🧙', label: 'PNJ Procedural',     description: 'Personagem com nome, ofício e traço' },
+  { key: 'npcNames',        icon: '🧑', label: 'Nome de PNJ',        description: 'Primeiro nome + sobrenome aleatório' },
+  { key: 'rumors',          icon: '👂', label: 'Boato de Taverna',   description: 'Um segredo ouvido no saloon esta noite' },
+  { key: 'weather',         icon: '🌤️', label: 'Clima e Tempo',      description: 'Condição climática para a cena atual' },
+  { key: 'shopInventory',   icon: '🛒', label: 'Mercador Aleatório', description: 'Um item curioso ou sombrio à venda' },
+  { key: 'encounterHooks',  icon: '🎭', label: 'Gancho de Cena',     description: 'Um evento que puxa os jogadores para a ação' },
+] as const;
 
-  const gen = GENERATORS[activeGen];
+type ProceduralCategoryKey = typeof PROCEDURAL_CATEGORIES[number]['key'];
 
-  const handleGenerate = () => {
-    const r = gen.generate();
-    setResults((prev) => [r, ...prev].slice(0, 12));
+// Mantém as últimas 5 gerações por categoria
+type HistoryMap = Record<string, string[]>;
+
+// =============================================================================
+// Componente: Card Individual de Gerador Procedural
+// =============================================================================
+
+interface ProceduralCardProps {
+  icon: string;
+  label: string;
+  description: string;
+  categoryKey: string;
+  history: string[];
+  onGenerate: (key: string) => void;
+}
+
+function ProceduralCard({ icon, label, description, categoryKey, history, onGenerate }: ProceduralCardProps) {
+  const latest = history[0] ?? null;
+  const past = history.slice(1);
+
+  const [copiedText, setCopiedText] = useState<string | null>(null);
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedText(text);
+      setTimeout(() => setCopiedText(null), 1500); // feedback visual de 1.5s
+    } catch (err) {
+      console.error('Falha ao copiar:', err);
+    }
   };
 
-  const handleClear = () => setResults([]);
-
   return (
-    <div className="flex flex-col h-full">
-      {/* Cabeçalho */}
-      <div className="shrink-0 px-4 py-3 border-b border-codex-border">
-        <h2 className="font-heading text-sm text-gold-primary">⚡ Geradores Rápidos</h2>
-        <p className="text-[10px] text-text-muted mt-0.5">Conteúdo pré-configurado para improvisar</p>
-      </div>
-
-      {/* Seletor de gerador */}
-      <div className="shrink-0 p-3 border-b border-codex-border flex flex-col gap-2">
-        <div className="grid grid-cols-1 gap-1">
-          {(Object.keys(GENERATORS) as GeneratorKey[]).map((key) => {
-            const g = GENERATORS[key];
-            return (
-              <button
-                key={key}
-                onClick={() => { setActiveGen(key); setResults([]); }}
-                className={`flex items-center gap-2 px-3 py-2 rounded text-xs text-left transition-colors ${
-                  activeGen === key
-                    ? 'bg-codex-surface2 text-gold-primary border border-gold-dim'
-                    : 'bg-codex-bg text-text-secondary hover:bg-codex-surface border border-codex-border'
-                }`}
-              >
-                <span>{g.icon}</span>
-                <span>{g.label}</span>
-              </button>
-            );
-          })}
+    <div className="card flex flex-col gap-3 p-4">
+      {/* Cabeçalho do Card */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="text-xl shrink-0">{icon}</span>
+          <div>
+            <h3 className="font-heading text-xs text-text-primary leading-tight">{label}</h3>
+            <p className="text-[10px] text-text-muted mt-0.5">{description}</p>
+          </div>
         </div>
-
-        <button onClick={handleGenerate} className="btn-primary w-full text-xs py-2">
-          🎲 Gerar {gen.label}
+        <button
+          id={`procedural-generate-${categoryKey}`}
+          onClick={() => onGenerate(categoryKey)}
+          className="btn-primary text-[10px] py-1 px-3 shrink-0"
+        >
+          Gerar
         </button>
       </div>
 
-      {/* Resultados */}
-      <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-1.5">
-        {results.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full gap-2 text-center">
-            <span className="text-4xl opacity-20">{gen.icon}</span>
-            <p className="text-xs text-text-muted">Clique em "Gerar" para criar resultados.</p>
-          </div>
-        ) : (
-          <>
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] text-text-muted">{results.length} resultado(s)</span>
-              <button onClick={handleClear} className="text-[10px] text-text-muted hover:text-crimson-bright">Limpar</button>
-            </div>
-            {results.map((r, i) => (
-              <div
-                key={i}
-                className={`text-xs text-text-secondary bg-codex-bg rounded border px-3 py-2 leading-relaxed ${
-                  i === 0 ? 'border-gold-dim text-text-primary' : 'border-codex-border'
-                }`}
-              >
-                {r}
-              </div>
-            ))}
-          </>
-        )}
+      {/* Resultado Principal (index 0) com destaque e fade-in */}
+      {latest !== null ? (
+        <div
+          className="bg-codex-bg border border-gold-dim/50 rounded-md px-3 py-2.5 animate-fade-in cursor-pointer hover:border-gold-primary transition-colors relative"
+          onClick={() => copyToClipboard(latest)}
+          title="Clique para copiar"
+        >
+          <p className="text-sm font-heading text-gold-primary leading-snug">{latest}</p>
+          {copiedText === latest && (
+            <span className="absolute top-1 right-2 text-[9px] text-green-500 font-bold bg-codex-bg px-1 rounded shadow-sm">Copiado!</span>
+          )}
+        </div>
+      ) : (
+        <div className="bg-codex-bg border border-codex-border/40 rounded-md px-3 py-2.5">
+          <p className="text-xs text-text-muted italic">Clique em Gerar para criar um resultado.</p>
+        </div>
+      )}
+
+      {/* Histórico Secundário (indices 1–4), opacidade reduzida */}
+      {past.length > 0 && (
+        <div className="flex flex-col gap-1">
+          {past.map((entry, i) => (
+            <p
+              key={i}
+              className="text-[11px] text-text-muted pl-1 border-l border-codex-border leading-snug cursor-pointer hover:text-text-primary transition-colors relative pr-12"
+              style={{ opacity: 1 - (i + 1) * 0.2 }}
+              onClick={() => copyToClipboard(entry)}
+              title="Clique para copiar"
+            >
+              {entry}
+              {copiedText === entry && (
+                <span className="absolute right-0 top-0 text-[9px] text-green-500 font-bold opacity-100">Copiado!</span>
+              )}
+            </p>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// =============================================================================
+// Componente: Painel de Geradores Procedurais
+// =============================================================================
+
+function ProceduralGeneratorsPanel() {
+  const [historyMap, setHistoryMap] = useState<HistoryMap>({});
+
+  const handleGenerate = (key: string) => {
+    const result = generateFromTemplate(key);
+    if (!result) return;
+
+    setHistoryMap((prev) => {
+      const prevHistory = prev[key] ?? [];
+      // Mantém as últimas 5 gerações (o mais recente no início)
+      const updated = [result, ...prevHistory].slice(0, 5);
+      return { ...prev, [key]: updated };
+    });
+  };
+
+  return (
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Cabeçalho */}
+      <div className="shrink-0 px-5 py-3 border-b border-codex-border bg-codex-surface">
+        <h2 className="font-heading text-sm text-gold-primary">⚡ Geradores Procedurais</h2>
+        <p className="text-[10px] text-text-muted mt-0.5">Conteúdo gerado dinamicamente por template engine</p>
+      </div>
+
+      {/* Grid de Cards */}
+      <div className="flex-1 overflow-y-auto p-5">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          {PROCEDURAL_CATEGORIES.map((cat) => (
+            <ProceduralCard
+              key={cat.key}
+              icon={cat.icon}
+              label={cat.label}
+              description={cat.description}
+              categoryKey={cat.key}
+              history={historyMap[cat.key] ?? []}
+              onGenerate={handleGenerate}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );
 }
+
 
 // =============================================================================
 // Componente Principal: GeneratorsView
@@ -585,9 +662,9 @@ export default function GeneratorsView() {
         </div>
       </div>
 
-      {/* ===== Coluna Direita: Geradores Estáticos ===== */}
-      <div className="w-72 shrink-0 flex flex-col overflow-hidden bg-codex-surface border-l border-codex-border">
-        <StaticGeneratorsPanel />
+      {/* ===== Coluna Direita: Geradores Procedurais ===== */}
+      <div className="w-[480px] shrink-0 flex flex-col overflow-hidden bg-codex-bg border-l border-codex-border">
+        <ProceduralGeneratorsPanel />
       </div>
 
       {/* Modal de confirmação de exclusão */}

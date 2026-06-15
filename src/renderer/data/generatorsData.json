@@ -1,0 +1,78 @@
+{
+  "tavern": {
+    "templates": [
+      "A {noun} {adjective}",
+      "O Descanso do {profession}",
+      "Taverna {adjective} do {name}",
+      "{noun} e {noun}"
+    ],
+    "noun": [
+      "Caneca",
+      "Espada",
+      "Coroa",
+      "Sereia",
+      "Dragão",
+      "Moeda"
+    ],
+    "adjective": [
+      "Enferrujada",
+      "Reluzente",
+      "Quebrada",
+      "Sorridente",
+      "Cega",
+      "Dourada"
+    ],
+    "profession": [
+      "Aventureiro",
+      "Rei",
+      "Ferreiro",
+      "Bardo",
+      "Mago",
+      "Lobo"
+    ],
+    "name": [
+      "Gimli",
+      "Arthur",
+      "Merlin",
+      "Grim",
+      "Balin"
+    ]
+  },
+  "npc": {
+    "templates": [
+      "{name}, o {profession} {adjective}"
+    ],
+    "name": [
+      "Kael",
+      "Elara",
+      "Thorin",
+      "Lyra"
+    ],
+    "profession": [
+      "Guarda",
+      "Ladrão",
+      "Nobre",
+      "Mercador"
+    ],
+    "adjective": [
+      "Misterioso",
+      "Zangado",
+      "Alegre",
+      "Desconfiado"
+    ]
+  },
+  "recursive_example": {
+    "templates": [
+      "O {animal_phrase} dorme."
+    ],
+    "animal_phrase": [
+      "pequeno {animal}",
+      "grande {animal}"
+    ],
+    "animal": [
+      "gato",
+      "cão",
+      "urso"
+    ]
+  }
+}
