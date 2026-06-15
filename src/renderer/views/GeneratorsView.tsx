@@ -586,7 +586,7 @@ export default function GeneratorsView() {
       </div>
 
       {/* ===== Coluna Direita: Geradores Estáticos ===== */}
-      <div className="w-72 shrink-0 flex flex-col overflow-hidden bg-codex-surface">
+      <div className="w-72 shrink-0 flex flex-col overflow-hidden bg-codex-surface border-l border-codex-border">
         <StaticGeneratorsPanel />
       </div>
 
