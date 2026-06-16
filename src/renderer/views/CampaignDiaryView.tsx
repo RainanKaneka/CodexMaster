@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { SessionLog, AdventureHook } from '../../main/types';
 import { useDatabase } from '../context/DatabaseContext';
+import { ParsedText } from '../components/ParsedText';
 
 // =============================================================================
 // CampaignDiaryView — Diário de Campanha (Fase 5)
@@ -469,7 +470,7 @@ export default function CampaignDiaryView() {
               <div className="flex-1 overflow-y-auto px-8 py-6 max-w-3xl mx-auto w-full">
                 {selectedSession.summary ? (
                   <pre className="text-sm text-text-secondary font-mono leading-relaxed whitespace-pre-wrap">
-                    {selectedSession.summary}
+                    <ParsedText text={selectedSession.summary} />
                   </pre>
                 ) : (
                   <div className="flex flex-col items-center justify-center h-full gap-3 text-center py-12">
