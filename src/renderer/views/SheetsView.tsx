@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { CharacterSheet, Attributes, LoreNode, Spell, Item, Ability } from '../../main/types';
 import { useDatabase } from '../context/DatabaseContext';
+import { useTabs } from '../context/TabsContext';
 import { ImageCropperModal } from '../components/ImageCropperModal';
 import {
   calculateModifier,
@@ -1523,6 +1524,7 @@ function SheetCard({ sheet, isSelected, onSelect, onDelete }: SheetCardProps) {
 
 export default function SheetsView() {
   const { sheets, saveSheet, deleteSheet, loreTree } = useDatabase();
+  const { tabs, activeTabId } = useTabs();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editingSheet, setEditingSheet] = useState<CharacterSheet | null>(null);
   const [filterType, setFilterType] = useState<'all' | 'player' | 'creature'>('all');
@@ -1575,6 +1577,18 @@ export default function SheetsView() {
     window.addEventListener('codex-navigate', handleNavigate);
     return () => window.removeEventListener('codex-navigate', handleNavigate);
   }, [sheets]);
+
+  // 3. Listener para navegação via TabsContext (ex: ParsedText)
+  useEffect(() => {
+    const activeTab = tabs.find(t => t.id === activeTabId);
+    if (activeTab?.type === 'sheets' && activeTab.entityId) {
+      const targetSheet = sheets.find(s => s.id === activeTab.entityId);
+      if (targetSheet && targetSheet.id !== selectedId) {
+        setSelectedId(targetSheet.id);
+        setEditingSheet({ ...targetSheet });
+      }
+    }
+  }, [activeTabId, tabs, sheets, selectedId]);
 
   const handleSelectSheet = (sheet: CharacterSheet) => {
     setSelectedId(sheet.id);

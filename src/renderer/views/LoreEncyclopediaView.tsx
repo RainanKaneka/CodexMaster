@@ -2,6 +2,9 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { LoreNode, CharacterSheet } from '../../main/types';
 import { useDatabase } from '../context/DatabaseContext';
 import { ImageCropperModal } from '../components/ImageCropperModal';
+import { EntityAutocompleteTextarea } from '../components/EntityAutocompleteTextarea';
+import { ParsedText } from '../components/ParsedText';
+import { useTabs } from '../context/TabsContext';
 
 // =============================================================================
 // LoreEncyclopediaView — Enciclopédia de Lore (Fase 4)
@@ -820,6 +823,7 @@ interface MediaUrls {
 
 export default function LoreEncyclopediaView() {
   const { loreTree, saveLoreNode, deleteLoreNode, sheets } = useDatabase();
+  const { activeTab } = useTabs();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editorMode, setEditorMode] = useState<EditorMode>('view');
@@ -854,6 +858,24 @@ export default function LoreEncyclopediaView() {
     return new Set<string>();
   });
 
+  // Sincroniza navegação cruzada via evento global (bypass do cache de abas do React)
+  useEffect(() => {
+    const handleForceOpen = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const noteId = customEvent.detail;
+      
+      if (noteId) {
+        // Força a atualização do estado interno da view
+        setSelectedId(noteId);
+        setEditorMode('view');
+      }
+    };
+
+    window.addEventListener('force-open-lore', handleForceOpen);
+    
+    // Cleanup crítico para evitar memory leaks
+    return () => window.removeEventListener('force-open-lore', handleForceOpen);
+  }, []);
   const handleToggleFolder = useCallback((folderId: string) => {
     setExpandedFolders((prev) => {
       const next = new Set(prev);
@@ -1551,8 +1573,8 @@ export default function LoreEncyclopediaView() {
               </div>
             </div>
 
-            {/* Textarea do Editor */}
-            <textarea
+            {/* Textarea do Editor com Autocomplete */}
+            <EntityAutocompleteTextarea
               id="lore-editor-textarea"
               ref={textareaRef}
               value={draftContent}
@@ -1560,7 +1582,7 @@ export default function LoreEncyclopediaView() {
               onMouseUp={handleTextareaSelectionChange}
               onKeyUp={handleTextareaSelectionChange}
               placeholder={`# ${draftTitle || 'Título da Nota'}\n\nEscreva em Markdown...\n\nUse @ para vincular fichas ou [[Nome da Nota]] para links entre notas de Lore.`}
-              className="flex-1 resize-none bg-codex-bg text-text-secondary text-sm font-mono leading-relaxed p-5 focus:outline-none selectable border-none"
+              className="flex-1 w-full h-full resize-none bg-codex-bg text-text-secondary text-sm font-mono leading-relaxed p-5 focus:outline-none selectable border-none"
             />
 
             {/* Dropdown de autocomplete @ */}
@@ -1627,11 +1649,7 @@ export default function LoreEncyclopediaView() {
 
               <div className="max-w-2xl mx-auto px-6 py-5">
                 {selectedNode.content ? (
-                  <MarkdownRenderer
-                    content={selectedNode.content}
-                    onWikilink={handleWikilink}
-                    onSheetLink={handleSheetLink}
-                  />
+                  <ParsedText text={selectedNode.content} onEntityClick={handleWikilink} />
                 ) : (
                   <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
                     <span className="text-4xl opacity-20">📝</span>

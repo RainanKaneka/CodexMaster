@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo } from 'react';
 import { SessionLog, AdventureHook } from '../../main/types';
 import { useDatabase } from '../context/DatabaseContext';
 import { ParsedText } from '../components/ParsedText';
+import { EntityAutocompleteTextarea } from '../components/EntityAutocompleteTextarea';
 
 // =============================================================================
 // CampaignDiaryView — Diário de Campanha (Fase 5)
@@ -59,11 +60,11 @@ function SessionEditor({ session, onSave, onCancel }: SessionEditorProps) {
           className="input-medieval text-sm w-40 shrink-0"
         />
       </div>
-      <textarea
+      <EntityAutocompleteTextarea
         value={summary}
         onChange={(e) => setSummary(e.target.value)}
-        placeholder="Escreva o resumo da sessão em Markdown...&#10;&#10;Descreva os eventos principais, decisões dos jogadores, consequências e revelações importantes."
-        className="flex-1 resize-none bg-codex-bg text-text-secondary text-sm font-mono leading-relaxed p-4 rounded border border-codex-border focus:outline-none focus:border-gold-dim"
+        placeholder="Escreva o resumo da sessão em Markdown...&#10;&#10;Descreva os eventos principais, decisões dos jogadores, consequências e revelações importantes. (Dica: digite [[ para linkar Lore e Personagens)"
+        className="flex-1 w-full h-full resize-none bg-codex-bg text-text-secondary text-sm font-mono leading-relaxed p-4 rounded border border-codex-border focus:outline-none focus:border-gold-dim"
       />
       <div className="flex gap-2 justify-end shrink-0">
         <button type="button" onClick={onCancel} className="btn-secondary text-xs py-1.5 px-4">
