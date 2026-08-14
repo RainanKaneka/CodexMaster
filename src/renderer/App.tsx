@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DatabaseProvider } from './context/DatabaseContext';
 import { TabsProvider, useTabs, TabType, TAB_DEFAULTS } from './context/TabsContext';
 import { useTabShortcuts } from './hooks/useTabShortcuts';
@@ -16,16 +16,18 @@ import GeneratorsView from './views/GeneratorsView';
 import SettingsView from './views/SettingsView';
 import ReleaseNotesModal, { useReleaseNotes } from './components/ReleaseNotesModal';
 import AutoUpdateOverlay from './components/AutoUpdateOverlay';
+import VaultSelectionView from './views/VaultSelectionView';
 
 // =============================================================================
-// App.tsx — Componente Raiz do CodexMaster (v1.4.0 — Workspace)
+// App.tsx — Componente Raiz do CodexMaster (v2.0.0 — Sistema de Cofres)
 //
 // Arquitetura:
-//   DatabaseProvider → TabsProvider → AppContent
+//   VaultGateway → DatabaseProvider → TabsProvider → AppContent
 //
-// Dois modos de renderização:
-//   1. Modo Normal  → Sidebar + TabBar + WorkspaceEmptyState + views empilhadas
-//   2. Modo Pop-out → View única (sem Sidebar/TabBar), detectado via URL hash
+// Três modos de renderização:
+//   1. Porteiro (gateway) → VaultSelectionView quando nenhum cofre está ativo
+//   2. Modo Normal        → Sidebar + TabBar + WorkspaceEmptyState + views empilhadas
+//   3. Modo Pop-out       → View única (sem Sidebar/TabBar), detectado via URL hash
 //      Hash format: #popout?view=<TabType>&entityId=<id>
 // =============================================================================
 
@@ -197,7 +199,7 @@ function AppContent() {
 }
 
 // ---------------------------------------------------------------------------
-// App — Raiz com Providers + detecção de modo pop-out
+// App — Raíz com Providers + detecção de modo pop-out + Porteiro de Cofres
 // ---------------------------------------------------------------------------
 
 export default function App() {
@@ -214,6 +216,49 @@ export default function App() {
     );
   }
 
+  return <VaultGateway />;
+}
+
+// ---------------------------------------------------------------------------
+// VaultGateway — Porteiro: verifica cofre ativo antes de renderizar o app
+// ---------------------------------------------------------------------------
+
+function VaultGateway() {
+  // null = ainda verificando | '' = sem cofre | 'id...' = cofre ativo
+  const [activeVaultId, setActiveVaultId] = useState<string | null>(null);
+  const [isChecking, setIsChecking] = useState(true);
+
+  useEffect(() => {
+    window.codexAPI.vaultGetActive()
+      .then((vault) => {
+        setActiveVaultId(vault?.id ?? '');
+      })
+      .catch(() => {
+        // Se falhar a leitura do config, manda para a seleção
+        setActiveVaultId('');
+      })
+      .finally(() => setIsChecking(false));
+  }, []);
+
+  // Tela de splash mínima enquanto verifica (evita flash de conteúdo)
+  if (isChecking) {
+    return (
+      <div className="flex items-center justify-center h-screen w-screen bg-codex-bg">
+        <span className="text-gold-dim/40 text-2xl animate-pulse select-none">⚔️</span>
+      </div>
+    );
+  }
+
+  // Sem cofre ativo → exibe o Porteiro
+  if (!activeVaultId) {
+    return (
+      <VaultSelectionView
+        onVaultSelected={(id) => setActiveVaultId(id)}
+      />
+    );
+  }
+
+  // Cofre ativo → renderiza o app completo
   return (
     <DatabaseProvider>
       <TabsProvider>
