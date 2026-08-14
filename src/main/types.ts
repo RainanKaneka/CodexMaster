@@ -561,6 +561,38 @@ export interface LocalDatabase {
 }
 
 // =============================================================================
+// VAULT SYSTEM (v2.0.0) — Sistema de Cofres / Campanhas
+// =============================================================================
+
+/**
+ * Representa um cofre (vault) — uma campanha isolada com seu próprio banco de dados.
+ * Cada vault é uma pasta no sistema de arquivos contendo seu db.json e media/.
+ */
+export interface VaultInfo {
+  /** Identificador único gerado via crypto.randomUUID() */
+  id: string;
+  /** Nome de exibição da campanha */
+  name: string;
+  /** Caminho absoluto da pasta do vault no sistema de arquivos */
+  path: string;
+  /** Data de criação em formato ISO 8601 */
+  createdAt: string;
+  /** Data da última modificação em formato ISO 8601 */
+  lastModified: string;
+}
+
+/**
+ * Configuração global do aplicativo, persistida em app-config.json.
+ * Rastreia todos os cofres registrados e qual foi o último ativo.
+ */
+export interface AppConfig {
+  /** Lista de todos os cofres registrados no aplicativo */
+  vaults: VaultInfo[];
+  /** ID do último cofre aberto pelo usuário (null se nunca abriu um cofre) */
+  lastActiveVaultId: string | null;
+}
+
+// =============================================================================
 // API EXPOSTA PELO PRELOAD (Tipagem do window.codexAPI)
 // Permite ao TypeScript do renderer conhecer os métodos disponíveis em
 // window.codexAPI sem depender de `any`.
@@ -675,6 +707,18 @@ export interface CodexAPI {
   // --- Janelas Destacáveis / Pop-outs (v1.4.0 Lote 3) ---
   /** Abre uma BrowserWindow pop-out exibindo a view indicada em modo isolado */
   openPopout: (type: string, entityId?: string, title?: string) => Promise<{ success: boolean }>;
+
+  // --- Sistema de Cofres / Vaults (v2.0.0) ---
+  /** Retorna todos os cofres registrados */
+  vaultGetAll: () => Promise<VaultInfo[]>;
+  /** Cria um novo cofre com o nome informado */
+  vaultCreate: (name: string) => Promise<VaultInfo>;
+  /** Retorna o cofre ativo (último aberto) ou null */
+  vaultGetActive: () => Promise<VaultInfo | null>;
+  /** Define o cofre ativo pelo ID */
+  vaultSetActive: (id: string) => Promise<void>;
+  /** Retorna o caminho padrão do diretório de cofres */
+  vaultGetDefaultDir: () => Promise<string>;
 }
 
 // Declaração global para que o renderer reconheça window.codexAPI com tipagem

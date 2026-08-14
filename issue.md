@@ -1,20 +1,40 @@
-# Issue: Módulo de Lore & Diário (v1.7.0)
+# [Feature] Sistema de Cofres (Vaults) - Gerenciamento de Múltiplas Campanhas
+**Versão Alvo:** v2.0.0
+**Status:** Em Andamento (Lote 1)
 
-## Contexto
-A versão 1.7.0 tem como objetivo transformar o CodexMaster em um ecossistema interligado. O Diário de Campanha e as Notas de Lore deixarão de ser textos estáticos para se tornarem documentos dinâmicos. Quando o Mestre mencionar um personagem, local ou artefato, o sistema deve reconhecer essa entidade e permitir acesso rápido às suas informações (Quick View) sem tirar o usuário da tela de leitura.
+## 📝 Descrição (Epic)
+Transformar o CodexMaster de um bloco de notas de campanha única para um **Hub de Gerenciamento de Multiversos**. O Mestre deve ser capaz de criar, listar e alternar entre múltiplas campanhas (Vaults) de forma isolada. Cada campanha terá seu próprio banco de dados (`db.json`) e pasta de ativos (imagens/mapas).
 
-## Requisitos de Implementação e Lotes (Fluxo TDD Exigido)
+## 🛠️ Arquitetura Proposta
+- **Gerenciamento Global:** Um arquivo `app-config.json` no diretório `userData` do Electron rastreará o diretório base das campanhas e a última campanha ativa.
+- **Isolamento de Dados:** Cada campanha será uma subpasta dentro de um diretório principal (ex: `Documents/CodexMaster/Vaults/NomeDaCampanha`).
+- **Tela de Gateway:** O React iniciará em uma tela de seleção (Launcher) caso nenhuma campanha esteja ativa.
 
-### Lote 1: Conexão de Entidades (Parser de Texto)
-* **Objetivo:** Criar a inteligência (Regex/Parser) que identifica marcações de entidades no meio de blocos de texto longo.
-* **Ações:**
-  - Definir um padrão de marcação de texto (Recomenda-se o padrão Wiki `[[Nome da Entidade]]` ou menção `@Nome`).
-  - **Testes Exigidos (TDD):** Criar testes unitários para a função de parser. Ela deve receber uma string comum e retornar uma estrutura de dados (ou nós de React) separando o que é texto normal do que é uma entidade linkável.
-  - Implementar o componente visual que renderiza esse texto formatado, transformando a marcação em um link/botão clicável dentro da Nota ou Diário.
+---
 
-### Lote 2: Quick View de Fichas (Componente Flutuante)
-* **Objetivo:** Renderizar um resumo rápido de uma entidade sem precisar navegar para a página dela.
-* **Ações:**
-  - Criar um componente de Popover/Tooltip interativo.
-  - Ao clicar (ou passar o mouse) sobre uma entidade destacada no Lote 1, o sistema deve buscar no banco de dados local (`db.json` / state) as informações básicas daquela ficha (Avatar, Nome, PV, CA, ou um pequeno resumo se for uma nota de Lore).
-  - **Testes Exigidos:** Testes de componente garantindo que o Popover renderize os dados corretos quando o link da entidade for acionado, lidando graciosamente com o cenário onde a entidade mencionada não existe no banco.
+## ✅ Lotes de Implementação (Tasks)
+
+### Lote 1: O Encanamento (Backend & IPC) - *[Em Andamento]*
+- [ ] Criar o gerenciador global de configurações (`app-config.json`) no processo principal do Electron.
+- [ ] Definir a lógica de criação da estrutura física de pastas no SO do usuário.
+- [ ] Implementar o handler IPC `vault:get-all` (listar campanhas existentes).
+- [ ] Implementar o handler IPC `vault:create` (gerar nova pasta e db.json inicial).
+- [ ] Implementar o handler IPC `vault:get-active` e `vault:set-active`.
+- [ ] Atualizar o `preload.ts` e as declarações de tipo para o React acessar os handlers.
+
+### Lote 2: O Porteiro (Gateway UI)
+- [ ] Criar a view `VaultSelectionView.tsx` (Tela de abertura do app).
+- [ ] Implementar a listagem de cofres puxando dados do IPC.
+- [ ] Criar modal/input para criar uma nova campanha.
+- [ ] Implementar lógica de roteamento: se existe um `activeVault`, pular direto para o CodexMaster; senão, mostrar o Gateway.
+
+### Lote 3: Hot-Swapping (Injeção de Contexto)
+- [ ] Refatorar o `DatabaseContext` para aceitar um caminho dinâmico de banco de dados baseado na campanha selecionada.
+- [ ] Garantir que o File System (fs) do Electron leia as imagens e referências da pasta *isolada* da campanha ativa, e não de um caminho global.
+- [ ] Criar botão de "Fechar Campanha" na UI principal para retornar à tela de Seleção de Cofres.
+
+---
+
+## 🐛 Riscos e Pontos de Atenção
+- **Paths Absolutos vs Relativos:** Muito cuidado ao salvar imagens. Agora os caminhos precisam ser relativos à pasta do Cofre atual, senão as imagens quebrarão ao trocar de campanha.
+- **Sincronia de Estado:** Garantir que o React limpe todo o cache e os estados globais ao fechar um cofre e abrir outro.

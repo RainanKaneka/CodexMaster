@@ -219,4 +219,25 @@ contextBridge.exposeInMainWorld('codexAPI', {
    */
   openPopout: (type: string, entityId?: string, title?: string): Promise<{ success: boolean }> =>
     ipcRenderer.invoke('window:open-popout', { type, entityId, title }),
+
+  // --- Sistema de Cofres / Vaults (v2.0.0) ---
+  /** Retorna todos os cofres registrados no app-config.json */
+  vaultGetAll: (): Promise<import('./types').VaultInfo[]> =>
+    ipcRenderer.invoke('vault:get-all'),
+
+  /** Cria um novo cofre com o nome informado */
+  vaultCreate: (name: string): Promise<import('./types').VaultInfo> =>
+    ipcRenderer.invoke('vault:create', name),
+
+  /** Retorna o cofre ativo (último aberto) ou null */
+  vaultGetActive: (): Promise<import('./types').VaultInfo | null> =>
+    ipcRenderer.invoke('vault:get-active'),
+
+  /** Define o cofre ativo pelo ID */
+  vaultSetActive: (id: string): Promise<void> =>
+    ipcRenderer.invoke('vault:set-active', id),
+
+  /** Retorna o caminho padrão do diretório de cofres */
+  vaultGetDefaultDir: (): Promise<string> =>
+    ipcRenderer.invoke('vault:get-default-dir'),
 });

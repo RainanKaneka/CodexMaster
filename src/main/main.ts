@@ -3,6 +3,7 @@ import { autoUpdater } from 'electron-updater';
 import path from 'path';
 import fs from 'fs';
 import { LocalDatabase, CharacterSheet, MapData, Spell, Item, Ability, ActiveEncounter, LoreNode, SessionLog, AdventureHook, RollTable } from './types';
+import * as vaultManager from './vaultManager';
 
 // =============================================================================
 // CONFIGURAÇÃO DE PATHS
@@ -192,6 +193,33 @@ function createWindow(): void {
 // IPC HANDLERS — Canais de comunicação seguros com o renderer
 // Regra direcao.md: Expor apenas funções de canal explícitas e envelopadas.
 // =============================================================================
+
+// ----- SISTEMA DE COFRES / VAULTS (v2.0.0) -----
+
+/** Retorna todos os cofres registrados no app-config.json */
+ipcMain.handle('vault:get-all', () => {
+  return vaultManager.getAllVaults();
+});
+
+/** Cria um novo cofre com o nome informado e retorna o VaultInfo */
+ipcMain.handle('vault:create', (_event, name: string) => {
+  return vaultManager.createVault(name);
+});
+
+/** Retorna o cofre ativo (último aberto) ou null */
+ipcMain.handle('vault:get-active', () => {
+  return vaultManager.getActiveVault();
+});
+
+/** Define o cofre ativo pelo ID */
+ipcMain.handle('vault:set-active', (_event, id: string) => {
+  vaultManager.setActiveVault(id);
+});
+
+/** Retorna o caminho padrão do diretório de cofres */
+ipcMain.handle('vault:get-default-dir', () => {
+  return vaultManager.getDefaultVaultsDir();
+});
 
 // ----- VERSÃO DO APP (Issue #15) -----
 
