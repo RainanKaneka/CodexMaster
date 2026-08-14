@@ -9,14 +9,29 @@ import * as vaultManager from './vaultManager';
 // CONFIGURAÇÃO DE PATHS
 // =============================================================================
 
+// =============================================================================
+// CONFIGURAÇÃO DE PATHS (v2.0.0 — Dinâmico por Cofre Ativo)
+// =============================================================================
+
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
 /**
- * Retorna o caminho do arquivo de banco de dados local.
- * Em produção, usa o UserData (AppData) do sistema operacional.
- * Em desenvolvimento, usa a raiz do projeto para facilitar inspeção.
+ * Retorna o caminho absoluto do db.json do cofre ativo.
+ *
+ * Lógica de prioridade (v2.0.0):
+ *   1. Se houver um cofre ativo registrado no app-config.json, usa ele.
+ *   2. Fallback legado (dev): raiz do projeto (mantido para não quebrar
+ *      o ambiente de desenvolvimento antes da migração completa).
+ *   3. Fallback legado (prod): userData do Electron.
+ *
+ * Retorna null se nenhum cofre está ativo e não existe fallback válido.
  */
-function getDbPath(): string {
+function getDbPath(): string | null {
+  const activeVault = vaultManager.getActiveVault();
+  if (activeVault) {
+    return path.join(activeVault.path, 'db.json');
+  }
+  // Fallback legado — removido no Lote 4 (migração total)
   if (isDev) {
     return path.join(app.getAppPath(), 'db.json');
   }
@@ -62,8 +77,18 @@ function getEmptyDatabase(): LocalDatabase {
  * `spells` ou `items` (criado antes da Fase 2), elas são inicializadas como
  * arrays vazios sem apagar nenhum dado existente (fichas, mapas, notas).
  */
+/**
+ * Lê o banco de dados do disco.
+ * Se o arquivo não existir, cria um db.json vazio e retorna a estrutura padrão.
+ *
+ * Retorna banco vazio silenciosamente se nenhum cofre estiver ativo.
+ */
 function readDatabase(): LocalDatabase {
   const dbPath = getDbPath();
+  if (!dbPath) {
+    console.warn('[CodexMaster] readDatabase: nenhum cofre ativo. Retornando banco vazio.');
+    return getEmptyDatabase();
+  }
   try {
     if (!fs.existsSync(dbPath)) {
       const emptyDb = getEmptyDatabase();
@@ -87,7 +112,10 @@ function readDatabase(): LocalDatabase {
       sessions:        parsed.sessions        ?? [],
       hooks:           parsed.hooks           ?? [],
       rollTables:      parsed.rollTables      ?? [],
-      homebrewSettings: parsed.homebrewSettings ?? { customMagicSchools: [], customLevels: [] },
+      homebrewSettings: {
+        customMagicSchools: parsed.homebrewSettings?.customMagicSchools ?? [],
+        customLevels: parsed.homebrewSettings?.customLevels ?? [],
+      },
     };
     return data;
   } catch (error) {
@@ -98,9 +126,14 @@ function readDatabase(): LocalDatabase {
 
 /**
  * Persiste o banco de dados no disco de forma atômica (escreve em arquivo temp, renomeia).
+ * Aborta silenciosamente se nenhum cofre estiver ativo.
  */
 function writeDatabase(data: LocalDatabase): void {
   const dbPath = getDbPath();
+  if (!dbPath) {
+    console.warn('[CodexMaster] writeDatabase: nenhum cofre ativo. Operação abortada.');
+    return;
+  }
   const tempPath = dbPath + '.tmp';
   try {
     fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), 'utf-8');
@@ -211,8 +244,8 @@ ipcMain.handle('vault:get-active', () => {
   return vaultManager.getActiveVault();
 });
 
-/** Define o cofre ativo pelo ID */
-ipcMain.handle('vault:set-active', (_event, id: string) => {
+/** Define o cofre ativo pelo ID, ou null para limpar (fechar campanha) */
+ipcMain.handle('vault:set-active', (_event, id: string | null) => {
   vaultManager.setActiveVault(id);
 });
 
@@ -502,9 +535,16 @@ ipcMain.handle('db:saveActiveEncounter', async (_event, encounter: ActiveEncount
  * Fica na mesma pasta do db.json (raiz do projeto em dev, userData em prod).
  * Garante que o diretório exista.
  */
-function getMediaDir(): string {
-  const dbDir = path.dirname(getDbPath());
-  const mediaDir = path.join(dbDir, 'media');
+/**
+ * Retorna o diretório de mídias do cofre ativo.
+ * A partir da v2.0.0, fica sempre dentro da pasta do cofre ativo.
+ * Garante que o diretório exista.
+ * Retorna null se nenhum cofre estiver ativo.
+ */
+function getMediaDir(): string | null {
+  const dbPath = getDbPath();
+  if (!dbPath) return null;
+  const mediaDir = path.join(path.dirname(dbPath), 'media');
   if (!fs.existsSync(mediaDir)) {
     fs.mkdirSync(mediaDir, { recursive: true });
   }
@@ -656,6 +696,7 @@ ipcMain.handle('db:saveHomebrewSettings', async (_event, settings: any) => {
 ipcMain.handle('fs:copyMediaFile', async (_event, srcPath: string, prefix: string) => {
   try {
     const mediaDir = getMediaDir();
+    if (!mediaDir) return null;
     const ext = path.extname(srcPath).toLowerCase();
     // Nome único baseado em timestamp para evitar colisões
     const filename = `${prefix}_${Date.now()}${ext}`;
@@ -676,6 +717,7 @@ ipcMain.handle('fs:copyMediaFile', async (_event, srcPath: string, prefix: strin
 ipcMain.handle('media:saveCroppedImage', async (_event, base64Data: string, prefix: string) => {
   try {
     const mediaDir = getMediaDir();
+    if (!mediaDir) return null;
     // Remove o header do base64 (data:image/png;base64,...)
     const matches = base64Data.match(/^data:image\/([a-zA-Z0-9]+);base64,(.+)$/);
     if (!matches || matches.length !== 3) {
@@ -701,8 +743,9 @@ ipcMain.handle('media:saveCroppedImage', async (_event, base64Data: string, pref
  */
 ipcMain.handle('fs:readMediaFileAsUrl', async (_event, relativePath: string) => {
   try {
-    const dbDir = path.dirname(getDbPath());
-    const absolutePath = path.join(dbDir, relativePath);
+    const dbPath = getDbPath();
+    if (!dbPath) return null;
+    const absolutePath = path.join(path.dirname(dbPath), relativePath);
     if (!fs.existsSync(absolutePath)) return null;
     // Converte para URL local:// compatível com o protocolo customizado do Electron
     return `local://${encodeURI(absolutePath.replace(/\\/g, '/'))}`;

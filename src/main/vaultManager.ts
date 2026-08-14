@@ -158,7 +158,10 @@ export function createVault(name: string): VaultInfo {
     sessions: [],
     hooks: [],
     rollTables: [],
-    homebrewSettings: {},
+    homebrewSettings: {
+      customMagicSchools: [],
+      customLevels: [],
+    },
   };
 
   fs.writeFileSync(
@@ -195,14 +198,14 @@ export function getActiveVault(): VaultInfo | null {
 }
 
 /**
- * Define o cofre ativo pelo ID.
+ * Define o cofre ativo pelo ID, ou null para limpar (fechar a campanha).
  * Atualiza o campo lastActiveVaultId no app-config.json.
  *
- * @param id — ID do cofre a ser ativado
+ * @param id — ID do cofre a ser ativado, ou null para fechar
  */
-export function setActiveVault(id: string): void {
+export function setActiveVault(id: string | null): void {
   const config = readConfig();
   config.lastActiveVaultId = id;
   writeConfig(config);
-  console.log(`[VaultManager] Cofre ativo definido: ${id}`);
+  console.log(`[VaultManager] Cofre ativo definido: ${id ?? '(nenhum)'}`);
 }

@@ -112,7 +112,7 @@ function PopoutContent({ view }: { view: TabType }) {
 // AppContent — Layout normal com abas (modo principal)
 // ---------------------------------------------------------------------------
 
-function AppContent() {
+function AppContent({ onCloseVault }: { onCloseVault: () => void }) {
   const { tabs, activeTabId, openTab } = useTabs();
   const { showModal, currentVersion, handleClose } = useReleaseNotes();
 
@@ -156,7 +156,7 @@ function AppContent() {
 
       {/* ===== Layout principal: Sidebar + Área de Conteúdo ===== */}
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar />
+        <Sidebar onCloseVault={onCloseVault} />
 
         <div className="flex flex-col flex-1 overflow-hidden">
           <TabBar />
@@ -258,11 +258,17 @@ function VaultGateway() {
     );
   }
 
+  // Fecha o cofre ativo e volta para a tela de seleção
+  const handleCloseVault = async () => {
+    await window.codexAPI.vaultSetActive(null);
+    setActiveVaultId('');
+  };
+
   // Cofre ativo → renderiza o app completo
   return (
     <DatabaseProvider>
       <TabsProvider>
-        <AppContent />
+        <AppContent onCloseVault={handleCloseVault} />
       </TabsProvider>
     </DatabaseProvider>
   );

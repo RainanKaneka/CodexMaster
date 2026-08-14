@@ -90,7 +90,7 @@ function SidebarContextMenu({ x, y, item, onOpenNewTab, onClose }: SidebarContex
 // Componente Principal: Sidebar
 // ---------------------------------------------------------------------------
 
-export default function Sidebar() {
+export default function Sidebar({ onCloseVault }: { onCloseVault: () => void }) {
   const [appVersion, setAppVersion] = useState<string>('');
   const { tabs, activeTabId, openTab, replaceCurrentTab } = useTabs();
 
@@ -180,9 +180,28 @@ export default function Sidebar() {
           })}
         </nav>
 
-        {/* Versão no rodapé */}
+        {/* Rodapé: Trocar Campanha + versão */}
         <div className="flex flex-col items-center mt-auto px-2">
           <div className="w-8 h-px bg-gold-dim mx-auto mb-3 opacity-30" />
+
+          {/* Botão Trocar Campanha */}
+          <button
+            id="nav-change-vault"
+            title="Trocar Campanha"
+            aria-label="Trocar Campanha"
+            onClick={onCloseVault}
+            className="w-full flex flex-col items-center gap-1 py-2.5 px-1 mb-2 rounded-lg
+                       text-text-muted border border-transparent
+                       hover:bg-codex-surface2 hover:text-text-secondary
+                       transition-all duration-200 ease-out group select-none"
+          >
+            <span className="text-base leading-none group-hover:scale-110 transition-transform">🏰</span>
+            <span className="text-[9px] font-body font-medium tracking-wide text-text-muted
+                             group-hover:text-text-secondary leading-tight text-center">
+              Trocar
+            </span>
+          </button>
+
           <span className="text-[9px] text-text-muted font-mono tracking-wide">
             {appVersion ? `v${appVersion}` : ''}
           </span>

@@ -715,8 +715,8 @@ export interface CodexAPI {
   vaultCreate: (name: string) => Promise<VaultInfo>;
   /** Retorna o cofre ativo (último aberto) ou null */
   vaultGetActive: () => Promise<VaultInfo | null>;
-  /** Define o cofre ativo pelo ID */
-  vaultSetActive: (id: string) => Promise<void>;
+  /** Define o cofre ativo pelo ID, ou null para fechar a campanha ativa */
+  vaultSetActive: (id: string | null) => Promise<void>;
   /** Retorna o caminho padrão do diretório de cofres */
   vaultGetDefaultDir: () => Promise<string>;
 }

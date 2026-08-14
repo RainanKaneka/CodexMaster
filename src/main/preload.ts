@@ -233,8 +233,8 @@ contextBridge.exposeInMainWorld('codexAPI', {
   vaultGetActive: (): Promise<import('./types').VaultInfo | null> =>
     ipcRenderer.invoke('vault:get-active'),
 
-  /** Define o cofre ativo pelo ID */
-  vaultSetActive: (id: string): Promise<void> =>
+  /** Define o cofre ativo pelo ID, ou null para fechar a campanha ativa */
+  vaultSetActive: (id: string | null): Promise<void> =>
     ipcRenderer.invoke('vault:set-active', id),
 
   /** Retorna o caminho padrão do diretório de cofres */
