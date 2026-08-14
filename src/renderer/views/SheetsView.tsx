@@ -69,6 +69,28 @@ const TAG_COLORS = [
   { hex: '#5a7a7a', label: 'Ardósia' },
 ];
 
+/**
+ * Perícias agrupadas por atributo governante (D&D 5e / SRD).
+ * Usadas para renderizar o painel de Proficiências em Perícias.
+ */
+const SKILLS_BY_ATTRIBUTE: { attr: string; label: string; skills: string[] }[] = [
+  { attr: 'str', label: 'Força',       skills: ['Atletismo'] },
+  { attr: 'dex', label: 'Destreza',    skills: ['Acrobacia', 'Furtividade', 'Prestidigitação'] },
+  { attr: 'int', label: 'Inteligência',skills: ['Arcanismo', 'História', 'Investigação', 'Natureza', 'Religião'] },
+  { attr: 'wis', label: 'Sabedoria',   skills: ['Adestrar Animais', 'Intuição', 'Medicina', 'Percepção', 'Sobrevivência'] },
+  { attr: 'cha', label: 'Carisma',     skills: ['Atuação', 'Enganação', 'Intimidação', 'Persuasão'] },
+];
+
+/** Atributos disponíveis para Testes de Resistência */
+const SAVING_THROW_ATTRS = [
+  { key: 'FOR', label: 'FOR' },
+  { key: 'DES', label: 'DES' },
+  { key: 'CON', label: 'CON' },
+  { key: 'INT', label: 'INT' },
+  { key: 'SAB', label: 'SAB' },
+  { key: 'CAR', label: 'CAR' },
+];
+
 type SheetTag = { name: string; color: string };
 
 interface TagInputProps {
@@ -753,6 +775,126 @@ function SheetForm({ sheet: initialSheet, onSave, onCancel, onAutoSave, loreTree
             </div>
           </div>
         </div>
+
+        {/* ===== Proficiências ===== */}
+        {sheet.type === 'player' && (
+          <div className="border-t border-codex-border/40 pt-4 mt-1 flex flex-col gap-4">
+
+            {/* Testes de Resistência */}
+            <div>
+              <p className="section-title mb-3">🛡 Testes de Resistência</p>
+              <div className="flex flex-wrap gap-2">
+                {SAVING_THROW_ATTRS.map(({ key, label }) => {
+                  const checked = (sheet.savingThrows ?? []).includes(key);
+                  return (
+                    <label
+                      key={key}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border cursor-pointer select-none
+                        transition-all duration-150 text-xs font-medium
+                        ${
+                          checked
+                            ? 'bg-yellow-500/15 border-yellow-500/60 text-yellow-300'
+                            : 'bg-codex-bg border-codex-border text-text-muted hover:border-gold-dim/50 hover:text-text-secondary'
+                        }`}
+                    >
+                      <input
+                        type="checkbox"
+                        className="sr-only"
+                        checked={checked}
+                        onChange={() => {
+                          const current = sheet.savingThrows ?? [];
+                          const next = checked
+                            ? current.filter((k) => k !== key)
+                            : [...current, key];
+                          updateField('savingThrows', next);
+                        }}
+                      />
+                      <span
+                        className={`w-3 h-3 rounded-sm border flex items-center justify-center shrink-0
+                          ${
+                            checked
+                              ? 'bg-yellow-500 border-yellow-400'
+                              : 'bg-codex-surface border-codex-border'
+                          }`}
+                      >
+                        {checked && (
+                          <svg viewBox="0 0 10 10" className="w-2 h-2 text-codex-bg" fill="currentColor">
+                            <path d="M1.5 5L4 7.5 8.5 2.5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        )}
+                      </span>
+                      {label}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Perícias */}
+            <div>
+              <p className="section-title mb-3">🎯 Perícias</p>
+              <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
+                {SKILLS_BY_ATTRIBUTE.map(({ attr, label, skills }) => (
+                  <div key={attr}>
+                    {/* Cabeçalho da coluna (Atributo) */}
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-gold-dim mb-1.5 border-b border-codex-border/40 pb-1">
+                      {label}
+                    </p>
+                    <div className="flex flex-col gap-1.5">
+                      {skills.map((skill) => {
+                        const checked = (sheet.skills ?? []).includes(skill);
+                        return (
+                          <label
+                            key={skill}
+                            className={`flex items-center gap-2 cursor-pointer select-none group`}
+                          >
+                            <input
+                              type="checkbox"
+                              className="sr-only"
+                              checked={checked}
+                              onChange={() => {
+                                const current = sheet.skills ?? [];
+                                const next = checked
+                                  ? current.filter((s) => s !== skill)
+                                  : [...current, skill];
+                                updateField('skills', next);
+                              }}
+                            />
+                            <span
+                              className={`w-3.5 h-3.5 rounded-sm border flex items-center justify-center shrink-0 transition-all duration-150
+                                ${
+                                  checked
+                                    ? 'bg-yellow-500 border-yellow-400'
+                                    : 'bg-codex-bg border-codex-border group-hover:border-gold-dim/50'
+                                }`}
+                            >
+                              {checked && (
+                                <svg viewBox="0 0 10 10" className="w-2 h-2 text-codex-bg" fill="currentColor">
+                                  <path d="M1.5 5L4 7.5 8.5 2.5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+                                </svg>
+                              )}
+                            </span>
+                            <span
+                              className={`text-xs transition-colors duration-150
+                                ${
+                                  checked
+                                    ? 'text-yellow-300 font-medium'
+                                    : 'text-text-muted group-hover:text-text-secondary'
+                                }`}
+                            >
+                              {skill}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+          </div>
+        )}
 
         {/* Testes contra a Morte (Issue #10) — só para Jogadores com PV <= 0 */}
         {sheet.type === 'player' && sheet.hpCurrent <= 0 && (

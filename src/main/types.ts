@@ -126,6 +126,18 @@ export interface CharacterSheet {
    * Dados de estado do corte (para manter a memória do reenquadramento)
    */
   avatarCropData?: any;
+  /**
+   * Testes de Resistência em que o personagem é proficiente (v2.0.0).
+   * Armazena as abreviações dos atributos: 'FOR' | 'DES' | 'CON' | 'INT' | 'SAB' | 'CAR'.
+   * Campo opcional para retrocompatibilidade com fichas anteriores.
+   */
+  savingThrows?: string[];
+  /**
+   * Perícias em que o personagem é proficiente (v2.0.0).
+   * Armazena o nome exato da perícia (ex: 'Atletismo', 'Furtividade').
+   * Campo opcional para retrocompatibilidade com fichas anteriores.
+   */
+  skills?: string[];
 }
 
 /**
